@@ -5,11 +5,11 @@ tool with slow motion, frame stepping, and rewind/fast-forward, and draw
 **timestamped telestrations** — annotations tied to the exact moment you drew
 them, which disappear as you move away and reappear when you scrub back.
 
-Ships as both a zero-install **web app** and an installable **Electron desktop
-app**, sharing the same player engine. Also includes a companion stream
-downloader (browser extension + remux script) for saving your own accessible
-game film locally, and a parser for Hudl's "Save Page As" presentation
-exports.
+Ships as both a zero-install **web app** — also installable as a PWA, and
+works offline once installed — and an **Electron desktop app**, sharing the
+same player engine. Also includes a companion stream downloader (browser
+extension + remux script) for saving your own accessible game film locally,
+and a parser for Hudl's "Save Page As" presentation exports.
 
 ![Timestamped telestration demo](docs/telestration-demo.gif)
 
@@ -40,6 +40,11 @@ it disappears, jump back to the note and it's there again.*
     file next to the video itself, loaded automatically whenever you reopen
     that video.
 - **Snapshot export** — flattens the current frame + drawing into a PNG.
+- **Installable, offline-capable web app** — a Web App Manifest + service
+  worker cache the app shell, so `web/index.html` can be installed (desktop
+  or mobile) and keeps working with no network at all. This is separate from
+  loading video files, which always works offline regardless — it's about
+  the app itself being available without a server to point a browser at.
 - **Downloader** (`extension/` + `downloader/`) — a browser extension that
   watches the current tab for video the page is loading and downloads it
   through Chrome's own download manager (using your existing logged-in
@@ -48,7 +53,17 @@ it disappears, jump back to the note and it's there again.*
   Node script that runs `ffmpeg -c copy`), and direct progressive video files
   (downloaded as a single already-playable file, no merge step) — which is
   what Hudl itself actually serves, based on the `.mp4` paths found in its
-  own page-export data.
+  own page-export data. A **Download All** button downloads every stream
+  detected on the tab in one click, two at a time (a small bounded
+  concurrency — enough to be meaningfully faster than one-at-a-time without
+  hammering the server or fighting your own bandwidth the way full
+  unbounded parallel downloads would). It also scrapes whatever identifying
+  info and structured data (tables, label/value pairs) it can find on the
+  page into a `.meta.json` sidecar saved alongside the video.
+- **Play Info panel** — select a clip's `.meta.json` sidecar alongside its
+  video (web app) or just have it sitting next to the video file (Electron,
+  auto-discovered) and the sidebar shows whatever the downloader captured
+  for that play.
 - **Hudl export importer** (`shared/hudl-import.js`) — parses a Chrome "Save
   Page As → Webpage, Complete" export of a Hudl presentation page (the
   `<name>.html` + `z/` folder format Hudl produces), resolving every
@@ -80,7 +95,20 @@ fetch. `chrome.downloads` then transfers the actual file(s) through the
 browser's own network stack, so your session cookies apply automatically.
 Manifest-based streams get their segments merged afterward with
 `ffmpeg -c copy` (no re-encoding); a direct progressive file needs no merge
-step at all.
+step at all. **Download All** runs up to 2 of these jobs at once (a small
+`async` worker pool in the popup) rather than either fully sequential (slow
+with several streams) or fully unbounded parallel (competes with itself for
+your bandwidth and can look like a burst of abusive traffic to the site's
+server) — 2 is a deliberately modest middle ground, not a tuned number.
+
+Right before a download starts, a separate small script runs in the page
+itself (`chrome.scripting.executeScript`, not `chrome.webRequest`, since this
+one needs to read the DOM) to scrape whatever identifying info and structured
+data it can find — see [Clip naming](#clip-naming) for the name, and any
+`<table>`/`<dl>` content becomes the `.meta.json` sidecar's `tables`/`fields`.
+It's a generic, blind heuristic (bounded and truncated so a large page can't
+produce a huge payload) — see [Clip naming](#clip-naming) for how to help me
+tighten it against the real markup if it comes up empty.
 
 ## Project layout
 
@@ -88,13 +116,19 @@ step at all.
 shared/          Player engine + Hudl-export parser, used by both apps
   player.js        Playback + timestamped-telestration engine
   player.css        Shared UI styling
+  play-info.js       Renders a clip's .meta.json sidecar as a Play Info panel
   hudl-import.js     Parses a Hudl "Save Page As" export into a play library
 
 web/             Zero-install web app (open web/index.html)
+  manifest.webmanifest  PWA manifest (name, icons, start_url, ...)
+  icons/                 App icons for the manifest / favicon / apple-touch
+sw.js            PWA service worker (repo root, not web/ -- see its own
+                   comment for why its scope needs to cover shared/ too)
 electron/        Installable desktop app (Electron)
 
 extension/       Browser extension: detects & downloads video (HLS/DASH
-                   segments or a direct progressive file)
+                   segments or a direct progressive file), and scrapes
+                   page metadata for clip naming + the Play Info sidecar
 downloader/      remux.js — merges downloaded HLS/DASH segments into one MP4
                    (not needed for a direct progressive-file download)
 
@@ -123,9 +157,31 @@ python3 -m http.server 8934
 Then open `http://localhost:8934/web/index.html`. (You can also just
 double-click `web/index.html` — it works over `file://` too, since nothing in
 it depends on a server — but a local server avoids any browser quirks around
-local-file permissions.)
+local-file permissions, and is required for the PWA install/offline support
+below, which needs a real origin.)
 
-Click **Open Video Files…** and pick any local `.mp4`/`.mov`/`.webm` files.
+Click **Open Video Files…** and pick any local `.mp4`/`.mov`/`.webm` files. If
+the downloader extension saved a `<clip>.meta.json` alongside a video (see
+[Clip naming](#clip-naming)), select it together with its video and the
+sidebar will show a **Play Info** panel for that clip.
+
+**Installing as an app / offline use:** once served over `http://` (not
+`file://`), the page is installable — most browsers show an install icon in
+the address bar, or use the browser's menu ("Install Film Room…" /
+"Add to Home Screen"). A service worker caches the app itself (not your video
+files, which are always local and never touch the network) so it keeps
+working with no connection at all once installed.
+
+**If you're editing the code:** Python's `http.server` doesn't send
+`Cache-Control` headers, so Chrome can silently keep serving a stale cached
+copy of `player.css`/`player.js` after you edit them — a hard reload
+(Cmd/Ctrl+Shift+R) or DevTools' "Disable cache" (Network tab, while DevTools
+is open) forces it to refetch. If you've already installed the PWA, its
+service worker adds a second layer of caching on top of that — bump
+`CACHE_NAME` in `sw.js` after changing anything under `web/` or `shared/` so
+installed copies pick up the update, and unregister the old service worker
+(DevTools → Application → Service Workers) if you still see stale content
+while developing.
 
 ### 2. Electron desktop app
 
@@ -156,11 +212,17 @@ quarantines it), delete `electron/node_modules/electron` and re-run
 3. Visit the video page you're logged into (in a tab you're legitimately
    authorized to view), start playback so the video's manifest loads, then
    click the extension icon.
-4. Click **Download** next to the detected stream. Segments save under
+4. Click **Download** next to a detected stream, or **Download All** to grab
+   every stream detected on the tab in one click (two at a time — see
+   [How it works](#how-it-works)). Segments save under
    `Downloads/FilmRoomDownloads/<name>/`, where `<name>` is built from
    whatever identifying info it can find on the page (see
    [Clip naming](#clip-naming) below) — the popup shows exactly what it
-   picked ("Naming as: …") before the download starts.
+   picked ("Naming as: …") before each download starts. If the page had a
+   table or label/value data worth keeping (down & distance, formation,
+   etc.), a `<name>.meta.json` sidecar is saved alongside the video too —
+   select it together with the video in the Film Room player to see it as a
+   **Play Info** panel.
 5. Run the remux script on that folder:
 
 ```bash
@@ -196,6 +258,14 @@ share what the play-number indicator actually looks like on the page (e.g.
 right-click → Inspect on it), I can target the selector directly instead of
 guessing.
 
+The same pass also scrapes up to 5 `<table>` elements and any `<dl>`
+label/value pairs anywhere on the page (each cell truncated, capped in
+count) into that clip's `.meta.json` sidecar's `tables`/`fields`. Same
+caveat: it's a blind scrape with no idea what Hudl's actual play-detail panel
+looks like, so whether it finds anything useful depends entirely on whether
+that data happens to be marked up as a `<table>` or `<dl>` rather than, say,
+a `<div>` grid — tell me what you get (or don't) and I can tighten it.
+
 ### Generating a test clip
 
 If you don't have real footage handy, this makes a 10-second synthetic
@@ -215,12 +285,12 @@ ffmpeg -f lavfi -i "testsrc=duration=10:size=960x540:rate=30" \
   Hudl's own embedded coach telestrations alongside your own notes).
 - DASH/fragmented-MP4 (`.m4s`) segment support in the downloader — currently
   targets the more common `.ts`-segment HLS case.
-- The progressive-file detection path (added for platforms like Hudl that
-  serve direct `.mp4` files instead of HLS/DASH) is verified against the
-  URL-classification logic in isolation, but hasn't yet been confirmed
-  end-to-end against a real logged-in session — that requires a live test
-  someone runs themselves, since the extension can't be loaded or driven
-  through browser automation.
+- The play-number / table / field scraping (see [Clip
+  naming](#clip-naming)) is a generic heuristic verified against synthetic
+  DOM structures, not against Hudl's actual markup — it'll improve as real
+  results (or empty ones) come back from live use.
+- **Download All**'s concurrency of 2 is a starting guess, not something
+  tuned against how Hudl's server actually responds under load.
 
 ## Responsible use
 

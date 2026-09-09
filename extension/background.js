@@ -72,23 +72,45 @@ function toDataUrl(text) {
   return 'data:text/plain;base64,' + b64;
 }
 
-async function runProgressiveJob(jobId, fileUrl, title, post) {
+// Saves whatever page metadata (play number, and any tables/label-value
+// pairs scraped off the page) was captured for this clip as a sidecar JSON
+// next to the video, named to match it -- so the Film Room player can find
+// and display it. Skips writing anything if nothing useful was found.
+async function savePlayInfo(folder, filenameBase, playInfo) {
+  const hasFields = playInfo && playInfo.fields && Object.keys(playInfo.fields).length;
+  const hasTables = playInfo && playInfo.tables && playInfo.tables.length;
+  if (!playInfo || (!playInfo.playLabel && !hasFields && !hasTables)) return;
+
+  const payload = {
+    version: 1,
+    capturedAt: new Date().toISOString(),
+    videoId: playInfo.videoId || null,
+    playLabel: playInfo.playLabel || null,
+    pageTitle: playInfo.pageTitle || null,
+    fields: playInfo.fields || {},
+    tables: playInfo.tables || [],
+  };
+  await downloadFile(toDataUrl(JSON.stringify(payload, null, 2)), `${folder}/${filenameBase}.meta.json`);
+}
+
+async function runProgressiveJob(jobId, fileUrl, title, post, playInfo) {
   const folder = 'FilmRoomDownloads/' + slugify(title);
   const ext = (fileUrl.split('?')[0].match(/\.(\w+)$/) || [, 'mp4'])[1];
   post({ status: 'downloading', done: 0, total: 1 });
   await downloadFile(fileUrl, `${folder}/${slugify(title)}.${ext}`);
   post({ status: 'downloading', done: 1, total: 1 });
+  await savePlayInfo(folder, slugify(title), playInfo);
   // No manifest, no segments -- it's already a single playable file, so
   // there's nothing for remux.js to do.
   post({ status: 'done', folder, noRemuxNeeded: true });
 }
 
-async function runJob(jobId, manifestUrl, title, streamType) {
+async function runJob(jobId, manifestUrl, title, streamType, playInfo) {
   const post = (patch) => chrome.runtime.sendMessage({ type: 'job-progress', jobId, ...patch }).catch(() => {});
 
   if (streamType === 'progressive') {
     try {
-      await runProgressiveJob(jobId, manifestUrl, title, post);
+      await runProgressiveJob(jobId, manifestUrl, title, post, playInfo);
     } catch (err) {
       post({ status: 'error', message: String(err && err.message ? err.message : err) });
     }
@@ -143,6 +165,8 @@ async function runJob(jobId, manifestUrl, title, streamType) {
       .map((n) => `file '${n}'`)
       .join('\n') + '\n';
     await downloadFile(toDataUrl(concatList), `${folder}/concat_list.txt`);
+    // Named to match remux.js's default output filename (output.mp4).
+    await savePlayInfo(folder, 'output', playInfo);
 
     post({ status: 'done', folder });
   } catch (err) {
@@ -162,7 +186,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'start-job') {
-    runJob(msg.jobId, msg.manifestUrl, msg.title, msg.streamType);
+    runJob(msg.jobId, msg.manifestUrl, msg.title, msg.streamType, msg.playInfo);
     sendResponse({ ok: true });
     return true;
   }

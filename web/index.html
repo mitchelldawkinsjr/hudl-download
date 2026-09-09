@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Film Room</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#14161a" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Film Room" />
 <link rel="stylesheet" href="../shared/player.css" />
 </head>
 <body>
@@ -11,7 +18,8 @@
     <div class="sidebar-header">
       <h1>Film Room</h1>
       <button class="btn primary" id="openFiles">Open Video Files…</button>
-      <input type="file" id="fileInput" accept="video/*" multiple hidden />
+      <input type="file" id="fileInput" accept="video/*,.json,application/json" multiple hidden />
+      <span style="font-size:11px;color:var(--text-dim);line-height:1.4;">Selecting a clip's <code>.meta.json</code> alongside it shows its Play Info.</span>
       <label class="field">FPS
         <select id="fpsSelect" class="speed-select">
           <option value="24">24</option>
@@ -24,6 +32,7 @@
     <div class="clip-list" id="clipList">
       <div class="empty-hint">No clips loaded yet. Click "Open Video Files…" and pick MP4 files you've downloaded. Nothing leaves your browser — files are read locally.</div>
     </div>
+    <div class="play-info" id="playInfo" hidden></div>
   </div>
 
   <div class="main">
@@ -92,6 +101,7 @@
 </div>
 
 <script src="../shared/player.js"></script>
+<script src="../shared/play-info.js"></script>
 <script>
 (function () {
   const video = document.getElementById('video');
@@ -101,8 +111,23 @@
 
   // ---- library ----
   const clipList = document.getElementById('clipList');
+  const playInfoEl = document.getElementById('playInfo');
   const clips = []; // { name, url, key }
+  const metaByBase = {}; // basename (no extension) -> parsed .meta.json content
   let activeIndex = -1;
+
+  // "Play-12-v97953713.mp4" and "Play-12-v97953713.meta.json" (the
+  // downloader extension's naming convention) share this same base.
+  function clipBaseName(filename) {
+    const metaStripped = filename.replace(/\.meta\.json$/i, '');
+    if (metaStripped !== filename) return metaStripped;
+    return filename.replace(/\.[^.]+$/, '');
+  }
+
+  function renderPlayInfoForActive() {
+    const clip = clips[activeIndex];
+    PlayInfo.renderPlayInfo(playInfoEl, clip ? metaByBase[clipBaseName(clip.name)] : null);
+  }
 
   function notesStorageKey(clipKey) {
     return 'filmroom.notes.' + clipKey;
@@ -149,6 +174,7 @@
     placeholder.style.display = 'none';
     player.load(clips[i].url);
     loadNotesForActiveClip();
+    renderPlayInfoForActive();
     renderClips();
   }
 
@@ -156,15 +182,27 @@
     document.getElementById('fileInput').click();
   });
 
-  document.getElementById('fileInput').addEventListener('change', (e) => {
+  document.getElementById('fileInput').addEventListener('change', async (e) => {
     const files = Array.from(e.target.files || []);
-    files.forEach((f) => clips.push({
+    const metaFiles = files.filter((f) => /\.meta\.json$/i.test(f.name));
+    const videoFiles = files.filter((f) => !/\.meta\.json$/i.test(f.name));
+
+    for (const f of metaFiles) {
+      try {
+        metaByBase[clipBaseName(f.name)] = JSON.parse(await f.text());
+      } catch (err) {
+        console.warn('Could not parse play-info file', f.name, err);
+      }
+    }
+
+    videoFiles.forEach((f) => clips.push({
       name: f.name,
       url: URL.createObjectURL(f),
       key: f.name + '|' + f.size + '|' + f.lastModified,
     }));
     renderClips();
     if (activeIndex === -1 && clips.length) selectClip(0);
+    else renderPlayInfoForActive(); // meta may have arrived after its video was already active
     e.target.value = '';
   });
 
@@ -316,6 +354,16 @@
     if (e.code === 'ArrowRight') player.stepFrame(1);
   });
 })();
+</script>
+<script>
+// Registers the app shell for offline use / installability. Service
+// workers require a secure context (http(s), not file://), so this simply
+// no-ops when the page is opened by double-clicking index.html -- the app
+// still works fine over file://, just without offline caching or an
+// install prompt in that mode.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('../sw.js', { scope: '../' }).catch(() => {});
+}
 </script>
 </body>
 </html>

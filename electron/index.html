@@ -23,6 +23,7 @@
     <div class="clip-list" id="clipList">
       <div class="empty-hint">No clips loaded yet. Click "Open Video Files…" and pick MP4 files you've downloaded.</div>
     </div>
+    <div class="play-info" id="playInfo" hidden></div>
   </div>
 
   <div class="main">
@@ -89,6 +90,7 @@
 </div>
 
 <script src="../shared/player.js"></script>
+<script src="../shared/play-info.js"></script>
 <script>
 (function () {
   const video = document.getElementById('video');
@@ -102,9 +104,24 @@
 
   // ---- library ----
   const clipList = document.getElementById('clipList');
+  const playInfoEl = document.getElementById('playInfo');
   const clips = []; // { name, url, path }
   let activeIndex = -1;
   const notesSaveStatus = document.getElementById('notesSaveStatus');
+
+  async function loadPlayInfoForActiveClip() {
+    const clip = clips[activeIndex];
+    if (!clip) {
+      PlayInfo.renderPlayInfo(playInfoEl, null);
+      return;
+    }
+    try {
+      const data = await window.electronAPI.readPlayInfo(clip.path);
+      PlayInfo.renderPlayInfo(playInfoEl, data);
+    } catch (e) {
+      PlayInfo.renderPlayInfo(playInfoEl, null);
+    }
+  }
 
   async function loadNotesForActiveClip() {
     const clip = clips[activeIndex];
@@ -155,6 +172,7 @@
     placeholder.style.display = 'none';
     player.load(clips[i].url);
     loadNotesForActiveClip();
+    loadPlayInfoForActiveClip();
     renderClips();
   }
 

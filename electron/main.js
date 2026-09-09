@@ -6,6 +6,10 @@ function sidecarPath(videoPath) {
   return videoPath.replace(/\.[^./\\]+$/, '') + '.telestration.json';
 }
 
+function playInfoPath(videoPath) {
+  return videoPath.replace(/\.[^./\\]+$/, '') + '.meta.json';
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
@@ -43,6 +47,16 @@ ipcMain.handle('read-notes', async (_evt, videoPath) => {
 ipcMain.handle('write-notes', async (_evt, videoPath, data) => {
   await fs.writeFile(sidecarPath(videoPath), JSON.stringify(data, null, 2), 'utf8');
   return true;
+});
+
+ipcMain.handle('read-play-info', async (_evt, videoPath) => {
+  try {
+    const text = await fs.readFile(playInfoPath(videoPath), 'utf8');
+    return JSON.parse(text);
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
 });
 
 app.whenReady().then(() => {

@@ -12,3 +12,4 @@ test-assets/
 # real exported film -- never commit actual game footage
 Start_WR*/
 *.telestration.json
+*.meta.json

@@ -89,6 +89,54 @@ html, body {
 .clip-item:hover { background: var(--bg-elevated); color: var(--text); }
 .clip-item.active { background: var(--accent); color: #1a1a1a; font-weight: 600; }
 
+.play-info {
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
+  font-size: 11px;
+  color: var(--text-dim);
+  max-height: 280px;
+  overflow-y: auto;
+  flex: 0 0 auto;
+}
+
+.play-info h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  margin: 0 0 6px;
+}
+
+.play-info .field-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.play-info .field-row .k { color: var(--text-dim); }
+.play-info .field-row .v { color: var(--text); text-align: right; }
+
+.play-info table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 10px;
+}
+
+.play-info table th,
+.play-info table td {
+  border: 1px solid var(--border);
+  padding: 3px 5px;
+  text-align: left;
+}
+
+.play-info table th {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
 .empty-hint {
   padding: 16px;
   color: var(--text-dim);

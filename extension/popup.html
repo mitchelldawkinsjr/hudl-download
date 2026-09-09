@@ -38,7 +38,9 @@
     font-size: 12px;
   }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #downloadAll { width: 100%; margin-bottom: 10px; display: none; }
   #progress { margin-top: 10px; font-size: 12px; }
+  .job-block { margin-bottom: 8px; }
   .bar {
     height: 6px;
     background: #262a33;
@@ -56,6 +58,7 @@
     Detected video streams on this tab. Runs inside your existing logged-in
     session — nothing is scraped without you clicking Download.
   </div>
+  <button id="downloadAll"></button>
   <div id="list"></div>
   <div id="progress"></div>
   <script src="popup.js"></script>
