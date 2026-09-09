@@ -57,9 +57,10 @@ it disappears, jump back to the note and it's there again.*
   detected on the tab in one click, two at a time (a small bounded
   concurrency — enough to be meaningfully faster than one-at-a-time without
   hammering the server or fighting your own bandwidth the way full
-  unbounded parallel downloads would). It also scrapes whatever identifying
-  info and structured data (tables, label/value pairs) it can find on the
-  page into a `.meta.json` sidecar saved alongside the video.
+  unbounded parallel downloads would). It also pulls play data (down,
+  distance, formation, play call, result, quarter, …) from Hudl's own
+  per-clip data fields into a `.meta.json` sidecar saved alongside the
+  video — see [Clip naming](#clip-naming) for exactly what it reads.
 - **Play Info panel** — select a clip's `.meta.json` sidecar alongside its
   video (web app) or just have it sitting next to the video file (Electron,
   auto-discovered) and the sidebar shows whatever the downloader captured
@@ -103,12 +104,9 @@ server) — 2 is a deliberately modest middle ground, not a tuned number.
 
 Right before a download starts, a separate small script runs in the page
 itself (`chrome.scripting.executeScript`, not `chrome.webRequest`, since this
-one needs to read the DOM) to scrape whatever identifying info and structured
-data it can find — see [Clip naming](#clip-naming) for the name, and any
-`<table>`/`<dl>` content becomes the `.meta.json` sidecar's `tables`/`fields`.
-It's a generic, blind heuristic (bounded and truncated so a large page can't
-produce a huge payload) — see [Clip naming](#clip-naming) for how to help me
-tighten it against the real markup if it comes up empty.
+one needs to read the DOM) to pull identifying info and play data for the
+`.meta.json` sidecar and the clip's filename — see [Clip
+naming](#clip-naming) for exactly what it reads and how.
 
 ## Project layout
 
@@ -234,37 +232,33 @@ player.
 
 ### Clip naming
 
-Since a page title alone ("Hudl", say) isn't enough to tell clips apart, the
-extension runs a small script in the page itself (via
+The extension runs a small script in the page itself (via
 `chrome.scripting.executeScript`) right before each download to build a
-better name, in priority order:
+clip name and, where available, a `.meta.json` sidecar of play data:
 
-1. A visible **"Play N"**-style label — first checked on whatever element
-   looks like the currently-selected item in a list (`.active`,
-   `.selected`, `aria-current`, …), then as a fallback anywhere in the
-   page's visible text, then as a further fallback inside any inline
-   `<script>` JSON blob using a `playNumber`/`playIndex` key. This is a
-   generic heuristic, not something built against Hudl's actual markup — it
-   works or it doesn't depending on how a given page happens to render.
-2. The page's `<title>`, if no play number was found.
-3. The clip's **video ID**, read from the page URL's `?v=` query parameter
-   (e.g. `.../analyze?v=97953713&...`) — this part is always reliable
-   (Hudl's own URL scheme, not a guess) and is always appended, so clips
-   never collide even when no play number is found.
-
-If a download comes out named just `clip-v<id>.mp4` (no play number), that
-means the page didn't have anything the heuristic recognized — if you can
-share what the play-number indicator actually looks like on the page (e.g.
-right-click → Inspect on it), I can target the selector directly instead of
-guessing.
-
-The same pass also scrapes up to 5 `<table>` elements and any `<dl>`
-label/value pairs anywhere on the page (each cell truncated, capped in
-count) into that clip's `.meta.json` sidecar's `tables`/`fields`. Same
-caveat: it's a blind scrape with no idea what Hudl's actual play-detail panel
-looks like, so whether it finds anything useful depends entirely on whether
-that data happens to be marked up as a `<table>` or `<dl>` rather than, say,
-a `<div>` grid — tell me what you get (or don't) and I can tighten it.
+1. **Hudl's own per-clip data fields.** Hudl's video-review page renders a
+   toolbar above the video with each field (`PLAY #`, `DN`, `DIST`,
+   `YARD LN`, `OFF FORM`, `OFF PLAY`, `RESULT`, `QTR`, …) tagged with its own
+   `data-qa-id="clip-preview-<FIELD NAME>-field"` attribute — Hudl's own
+   stable test-hook markup for exactly this data, confirmed against a real
+   page (not a guess). Every populated field becomes an entry in the
+   `.meta.json` sidecar's `fields`, and the `PLAY #` field becomes the clip
+   name's play number directly — no guessing needed on Hudl itself.
+2. If that toolbar isn't present (a non-Hudl page, or a layout change),
+   falls back to a generic, blind heuristic: a visible **"Play N"**-style
+   label on whatever looks like the current list item, then anywhere in the
+   page's text, then inside an inline `<script>` JSON blob; and separately,
+   any `<table>` or `<dl>` on the page becomes `fields`/`tables` in the
+   sidecar. This tier works or it doesn't depending on how a given page
+   happens to render — if you hit it and it comes up empty, tell me what
+   the page's play-detail markup actually looks like (right-click →
+   Inspect) and I can add a targeted rule the way Hudl's got one.
+3. Falls back further to the page's `<title>` if no play number was found
+   at all.
+4. The clip's **video ID**, read from the page URL's `?v=` query parameter
+   (e.g. `.../analyze?v=97953713&...`), is always appended regardless of the
+   above — reliable since it's Hudl's own URL scheme, not a guess — so
+   clips never collide even without a play number.
 
 ### Generating a test clip
 
@@ -285,12 +279,17 @@ ffmpeg -f lavfi -i "testsrc=duration=10:size=960x540:rate=30" \
   Hudl's own embedded coach telestrations alongside your own notes).
 - DASH/fragmented-MP4 (`.m4s`) segment support in the downloader — currently
   targets the more common `.ts`-segment HLS case.
-- The play-number / table / field scraping (see [Clip
-  naming](#clip-naming)) is a generic heuristic verified against synthetic
-  DOM structures, not against Hudl's actual markup — it'll improve as real
-  results (or empty ones) come back from live use.
+- The generic fallback play-number/table/`<dl>` scraping (tier 2 in [Clip
+  naming](#clip-naming), for non-Hudl pages) is only verified against
+  synthetic DOM structures — Hudl itself now uses the targeted
+  `clip-preview-*-field` extraction instead, confirmed against real markup.
 - **Download All**'s concurrency of 2 is a starting guess, not something
   tuned against how Hudl's server actually responds under load.
+- The ag-Grid play-by-play table visible in Hudl's sidebar (all 8 clips at
+  once, same fields as columns) isn't scraped — only the current clip's
+  toolbar is. Would need mapping ag-Grid's `col-id` attributes to their
+  header text, which the toolbar fields make unnecessary for the common
+  case (metadata for the clip you're actually downloading).
 
 ## Responsible use
 

@@ -15,58 +15,82 @@ function extractHudlMetadata() {
     result.videoId = new URL(location.href).searchParams.get('v');
   } catch (e) {}
 
-  // Any <table> on the page (e.g. a play-by-play grid, stat breakdown) --
-  // capped and truncated since this is a blind whole-document scan with no
-  // idea what Hudl's actual layout looks like.
-  const tableEls = document.querySelectorAll('table');
-  for (let i = 0; i < tableEls.length && result.tables.length < 5; i++) {
-    const rows = Array.from(tableEls[i].querySelectorAll('tr'))
-      .slice(0, 30)
-      .map((tr) => Array.from(tr.querySelectorAll('th,td')).map((cell) => (cell.textContent || '').trim().slice(0, 200)))
-      .filter((row) => row.some((cell) => cell));
-    if (rows.length) result.tables.push(rows);
+  // 1) Hudl's own per-clip data fields: data-qa-id="clip-preview-<NAME>-field"
+  //    on the toolbar above the video (PLAY #, DN, DIST, OFF FORM, RESULT,
+  //    QTR, ...). This is Hudl's own stable test-hook attribute for exactly
+  //    this data, not a guess -- confirmed against a real rendered page --
+  //    so it takes priority over every generic heuristic below. Structure:
+  //    each field element has a label child then a value child; reading by
+  //    position (not by class name) survives Hudl's hashed CSS-module
+  //    classes changing between builds.
+  const hudlFieldEls = document.querySelectorAll('[data-qa-id^="clip-preview-"][data-qa-id$="-field"]');
+  for (const el of hudlFieldEls) {
+    const qa = el.getAttribute('data-qa-id') || '';
+    const name = qa.replace(/^clip-preview-/, '').replace(/-field$/, '');
+    const kids = el.children;
+    if (!name || kids.length < 2) continue;
+    const value = (kids[1].textContent || '').trim();
+    // Hudl renders an unset field as a literal "-".
+    if (value && value !== '-') result.fields[name] = value.slice(0, 200);
   }
+  if (result.fields['PLAY #']) result.playLabel = 'Play-' + result.fields['PLAY #'];
 
-  // <dl> label/value pairs (down & distance, formation, result, etc. would
-  // commonly be marked up this way if they're not in a table).
-  for (const dl of document.querySelectorAll('dl')) {
-    for (const dt of dl.querySelectorAll('dt')) {
-      const dd = dt.nextElementSibling;
-      if (dd && dd.tagName === 'DD' && Object.keys(result.fields).length < 40) {
-        const key = (dt.textContent || '').trim().slice(0, 60);
-        const val = (dd.textContent || '').trim().slice(0, 200);
-        if (key && val) result.fields[key] = val;
+  // The rest only runs if the page didn't look like Hudl's clip-preview bar
+  // -- generic, blind fallbacks for other sites.
+  if (Object.keys(result.fields).length === 0) {
+    // Any <table> on the page (e.g. a play-by-play grid, stat breakdown).
+    const tableEls = document.querySelectorAll('table');
+    for (let i = 0; i < tableEls.length && result.tables.length < 5; i++) {
+      const rows = Array.from(tableEls[i].querySelectorAll('tr'))
+        .slice(0, 30)
+        .map((tr) => Array.from(tr.querySelectorAll('th,td')).map((cell) => (cell.textContent || '').trim().slice(0, 200)))
+        .filter((row) => row.some((cell) => cell));
+      if (rows.length) result.tables.push(rows);
+    }
+
+    // <dl> label/value pairs (down & distance, formation, result, etc.
+    // would commonly be marked up this way if they're not in a table).
+    for (const dl of document.querySelectorAll('dl')) {
+      for (const dt of dl.querySelectorAll('dt')) {
+        const dd = dt.nextElementSibling;
+        if (dd && dd.tagName === 'DD' && Object.keys(result.fields).length < 40) {
+          const key = (dt.textContent || '').trim().slice(0, 60);
+          const val = (dd.textContent || '').trim().slice(0, 200);
+          if (key && val) result.fields[key] = val;
+        }
       }
     }
   }
 
-  // \bplay\b keeps this from matching inside "playlist"/"playback"; the
-  // negative lookahead after the digits rejects things like "5s" or "1080p"
-  // -- unrelated player-chrome text (a Play button sitting next to a "5s"
-  // skip button, say) that would otherwise produce a confidently wrong
-  // play number, which is worse than no match at all.
-  const playRe = /\bplay\b\s*#?\s*(\d+)(?![a-zA-Z\d])/i;
+  if (!result.playLabel) {
+    // \bplay\b keeps this from matching inside "playlist"/"playback"; the
+    // negative lookahead after the digits rejects things like "5s" or
+    // "1080p" -- unrelated player-chrome text (a Play button sitting next
+    // to a "5s" skip button, say) that would otherwise produce a
+    // confidently wrong play number, which is worse than no match at all.
+    const playRe = /\bplay\b\s*#?\s*(\d+)(?![a-zA-Z\d])/i;
 
-  // 1) A "Play N" label on whatever looks like the currently-selected item
-  //    in a list (the common pattern for a play list UI).
-  const candidates = document.querySelectorAll(
-    '[class*="active" i], [class*="selected" i], [class*="current" i], [aria-current="true"], [aria-selected="true"]'
-  );
-  for (const el of candidates) {
-    const m = (el.textContent || '').trim().match(playRe);
-    if (m) {
-      result.playLabel = 'Play-' + m[1];
-      break;
+    // 2) A "Play N" label on whatever looks like the currently-selected
+    //    item in a list (the common pattern for a play list UI).
+    const candidates = document.querySelectorAll(
+      '[class*="active" i], [class*="selected" i], [class*="current" i], [aria-current="true"], [aria-selected="true"]'
+    );
+    for (const el of candidates) {
+      const m = (el.textContent || '').trim().match(playRe);
+      if (m) {
+        result.playLabel = 'Play-' + m[1];
+        break;
+      }
     }
   }
 
-  // 2) Fall back to scanning all visible text on the page.
+  // 3) Fall back to scanning all visible text on the page.
   if (!result.playLabel) {
-    const m = (document.body.innerText || '').match(playRe);
+    const m = (document.body.innerText || '').match(/\bplay\b\s*#?\s*(\d+)(?![a-zA-Z\d])/i);
     if (m) result.playLabel = 'Play-' + m[1];
   }
 
-  // 3) Fall back further to structured data some SPAs embed in an inline
+  // 4) Fall back further to structured data some SPAs embed in an inline
   //    <script> (Redux/Angular initial-state style blobs) even when it
   //    isn't rendered as visible text.
   if (!result.playLabel) {
