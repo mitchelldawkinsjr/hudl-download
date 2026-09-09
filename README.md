@@ -216,7 +216,7 @@ quarantines it), delete `electron/node_modules/electron` and re-run
 4. Click **Download** next to a detected stream, or **Download All** to grab
    every stream detected on the tab in one click (two at a time — see
    [How it works](#how-it-works)). Segments save under
-   `Downloads/FilmRoomDownloads/<mm-dd-yyyy_HH-mm>/<name>/`, where the first
+   `Downloads/FilmRoomDownloads/<mm-dd-yyyy_HH:mm>/<name>/`, where the first
    folder is when you clicked the download (so downloads started on
    different days land in clearly separate folders — a whole "Download All"
    batch shares one timestamp, since it was one click) and `<name>` is built
@@ -230,7 +230,7 @@ quarantines it), delete `electron/node_modules/electron` and re-run
 5. Run the remux script on that folder:
 
 ```bash
-node downloader/remux.js "~/Downloads/FilmRoomDownloads/<mm-dd-yyyy_HH-mm>/<title>"
+node downloader/remux.js "~/Downloads/FilmRoomDownloads/<mm-dd-yyyy_HH:mm>/<title>"
 ```
 
 This produces `output.mp4` in that same folder — open it in the Film Room

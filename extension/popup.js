@@ -153,16 +153,18 @@ function slugify(s) {
   return (s || '').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 }
 
-// The user's requested format is mm/dd/yyyy:HH:mm, but "/" and ":" aren't
-// valid in a single folder name -- "/" is a path separator (it would
-// silently create nested folders instead of one named that), and ":" is
-// flat-out rejected on Windows. This keeps the same mm/dd/yyyy ordering and
-// HH:mm time with filesystem-safe separators instead.
+// mm-dd-yyyy_HH:mm -- "/" can't be used between the date parts the way a
+// literal mm/dd/yyyy would (it's a path separator; it would silently
+// create nested folders, not one folder named that), so this uses "-"
+// there while keeping the ":" in the time as asked. macOS/Linux allow ":"
+// in a filename outright; Chrome's downloads API sanitizes it to
+// whatever's safe on the OS actually saving the file (e.g. Windows) rather
+// than erroring, so this doesn't need to pre-guess that itself.
 function downloadDateFolder(d) {
   const pad = (n) => String(n).padStart(2, '0');
   return (
     pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '-' + d.getFullYear() +
-    '_' + pad(d.getHours()) + '-' + pad(d.getMinutes())
+    '_' + pad(d.getHours()) + ':' + pad(d.getMinutes())
   );
 }
 

@@ -117,18 +117,17 @@ async function runProgressiveJob(jobId, fileUrl, folder, fileBase, post, playInf
   post({ status: 'done', folder, noRemuxNeeded: true });
 }
 
-// mm/dd/yyyy HH:mm of when the download was clicked -- "/" and ":" aren't
-// valid in a single folder name, so this keeps the same ordering with
-// filesystem-safe separators. Matches popup.js's downloadDateFolder();
-// duplicated rather than shared since a service worker can't import from
-// the popup's script. Used as a fallback if a job somehow arrives without
-// one (should not normally happen -- popup.js always sends it).
+// mm-dd-yyyy_HH:mm of when the download was clicked. Matches popup.js's
+// downloadDateFolder() (see its comment for the "/" -> "-" note); duplicated
+// rather than shared since a service worker can't import from the popup's
+// script. Used as a fallback if a job somehow arrives without one (should
+// not normally happen -- popup.js always sends it).
 function fallbackDateFolder() {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   return (
     pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '-' + d.getFullYear() +
-    '_' + pad(d.getHours()) + '-' + pad(d.getMinutes())
+    '_' + pad(d.getHours()) + ':' + pad(d.getMinutes())
   );
 }
 
