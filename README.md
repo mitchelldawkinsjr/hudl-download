@@ -216,18 +216,21 @@ quarantines it), delete `electron/node_modules/electron` and re-run
 4. Click **Download** next to a detected stream, or **Download All** to grab
    every stream detected on the tab in one click (two at a time — see
    [How it works](#how-it-works)). Segments save under
-   `Downloads/FilmRoomDownloads/<name>/`, where `<name>` is built from
-   whatever identifying info it can find on the page (see
-   [Clip naming](#clip-naming) below) — the popup shows exactly what it
-   picked ("Naming as: …") before each download starts. If the page had a
-   table or label/value data worth keeping (down & distance, formation,
-   etc.), a `<name>.meta.json` sidecar is saved alongside the video too —
-   select it together with the video in the Film Room player to see it as a
-   **Play Info** panel.
+   `Downloads/FilmRoomDownloads/<mm-dd-yyyy_HH-mm>/<name>/`, where the first
+   folder is when you clicked the download (so downloads started on
+   different days land in clearly separate folders — a whole "Download All"
+   batch shares one timestamp, since it was one click) and `<name>` is built
+   from whatever identifying info the page has (see [Clip
+   naming](#clip-naming) below) — the popup shows exactly what it picked
+   ("Naming as: …") before each download starts. If the page had a table or
+   label/value data worth keeping (down & distance, formation, etc.), a
+   `<name>.meta.json` sidecar is saved alongside the video too — select it
+   together with the video in the Film Room player to see it as a **Play
+   Info** panel.
 5. Run the remux script on that folder:
 
 ```bash
-node downloader/remux.js "~/Downloads/FilmRoomDownloads/<title>"
+node downloader/remux.js "~/Downloads/FilmRoomDownloads/<mm-dd-yyyy_HH-mm>/<title>"
 ```
 
 This produces `output.mp4` in that same folder — open it in the Film Room

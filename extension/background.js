@@ -117,14 +117,33 @@ async function runProgressiveJob(jobId, fileUrl, folder, fileBase, post, playInf
   post({ status: 'done', folder, noRemuxNeeded: true });
 }
 
+// mm/dd/yyyy HH:mm of when the download was clicked -- "/" and ":" aren't
+// valid in a single folder name, so this keeps the same ordering with
+// filesystem-safe separators. Matches popup.js's downloadDateFolder();
+// duplicated rather than shared since a service worker can't import from
+// the popup's script. Used as a fallback if a job somehow arrives without
+// one (should not normally happen -- popup.js always sends it).
+function fallbackDateFolder() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return (
+    pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '-' + d.getFullYear() +
+    '_' + pad(d.getHours()) + '-' + pad(d.getMinutes())
+  );
+}
+
 // `sharedFolder`, when set (by "Download All"), names one folder that every
 // stream from that run gets saved into together -- so the whole batch (clips
 // + .meta.json sidecars) is a single folder the Film Room web viewer can
 // load in one "Open Folder…" pick, rather than one folder per stream.
-async function runJob(jobId, manifestUrl, title, streamType, playInfo, sharedFolder) {
+// `dateFolder` (mm-dd-yyyy_HH-mm) is the first-level folder under
+// FilmRoomDownloads/, naming when the download was initiated, so downloads
+// started on different days end up clearly separated.
+async function runJob(jobId, manifestUrl, title, streamType, playInfo, sharedFolder, dateFolder) {
   const post = (patch) => chrome.runtime.sendMessage({ type: 'job-progress', jobId, ...patch }).catch(() => {});
   const fileBase = slugify(title);
-  const folder = 'FilmRoomDownloads/' + (sharedFolder ? slugify(sharedFolder) : fileBase);
+  const dateSeg = dateFolder || fallbackDateFolder();
+  const folder = 'FilmRoomDownloads/' + dateSeg + '/' + (sharedFolder ? slugify(sharedFolder) : fileBase);
 
   if (streamType === 'progressive') {
     try {
@@ -215,7 +234,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'start-job') {
-    runJob(msg.jobId, msg.manifestUrl, msg.title, msg.streamType, msg.playInfo, msg.folder);
+    runJob(msg.jobId, msg.manifestUrl, msg.title, msg.streamType, msg.playInfo, msg.folder, msg.dateFolder);
     sendResponse({ ok: true });
     return true;
   }

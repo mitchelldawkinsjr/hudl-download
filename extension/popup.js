@@ -153,6 +153,19 @@ function slugify(s) {
   return (s || '').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 }
 
+// The user's requested format is mm/dd/yyyy:HH:mm, but "/" and ":" aren't
+// valid in a single folder name -- "/" is a path separator (it would
+// silently create nested folders instead of one named that), and ":" is
+// flat-out rejected on Windows. This keeps the same mm/dd/yyyy ordering and
+// HH:mm time with filesystem-safe separators instead.
+function downloadDateFolder(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return (
+    pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '-' + d.getFullYear() +
+    '_' + pad(d.getHours()) + '-' + pad(d.getMinutes())
+  );
+}
+
 async function fetchPageMeta(tabId) {
   let meta = { videoId: null, playLabel: null, pageTitle: null, fields: {}, tables: [], gridRows: [] };
   try {
@@ -287,7 +300,7 @@ async function runWithConcurrency(items, limit, worker) {
     });
   }
 
-  function startJob(stream, name, label, playInfo, folder) {
+  function startJob(stream, name, label, playInfo, folder, dateFolder) {
     const jobId = 'job-' + Date.now() + '-' + jobCounter++;
     chrome.runtime.sendMessage({
       type: 'start-job',
@@ -297,6 +310,7 @@ async function runWithConcurrency(items, limit, worker) {
       title: name,
       playInfo,
       folder,
+      dateFolder,
     });
     return trackJob(jobId, label);
   }
@@ -315,9 +329,10 @@ async function runWithConcurrency(items, limit, worker) {
     row.querySelector('button').addEventListener('click', async (e) => {
       const btn = e.target;
       btn.disabled = true;
+      const dateFolder = downloadDateFolder(new Date()); // captured at click time, not after the async metadata fetch below
       const { name, meta } = await buildClipName(tab.id, s.playSnapshot);
       nameHint.textContent = 'Naming as: ' + name + (meta.playLabel ? '' : ' (no play number found on page — using page title + video id)');
-      startJob(s, name, label, meta);
+      startJob(s, name, label, meta, undefined, dateFolder);
     });
     listEl.appendChild(row);
   });
@@ -329,6 +344,10 @@ async function runWithConcurrency(items, limit, worker) {
       downloadAllBtn.disabled = true;
       document.querySelectorAll('.download-one').forEach((b) => (b.disabled = true));
 
+      // One timestamp for the whole batch -- every clip in this run was
+      // initiated by this one click, so they all share the same dated
+      // folder rather than each getting its own slightly-different one.
+      const dateFolder = downloadDateFolder(new Date());
       const meta = await fetchPageMeta(tab.id);
       // The shared download folder is still named after whichever clip is
       // currently loaded (or the page title) -- it's just a folder name,
@@ -352,12 +371,12 @@ async function runWithConcurrency(items, limit, worker) {
         // play number) when neither source is available.
         const { name: rowName, meta: rowMeta } = nameAndMetaFor(meta, i, s.playSnapshot);
         const finalName = rowMeta.playLabel ? rowName : `${rowName}-${i + 1}`;
-        await startJob(s, finalName, label, rowMeta, baseName);
+        await startJob(s, finalName, label, rowMeta, baseName, dateFolder);
         done++;
         update();
       });
 
-      summary.textContent = `All ${streams.length} streams downloaded to Downloads/FilmRoomDownloads/${slugify(baseName)}.`;
+      summary.textContent = `All ${streams.length} streams downloaded to Downloads/FilmRoomDownloads/${dateFolder}/${slugify(baseName)}.`;
     });
   }
 })();
