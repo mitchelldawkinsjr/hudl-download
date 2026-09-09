@@ -127,6 +127,9 @@ electron/        Installable desktop app (Electron)
 extension/       Browser extension: detects & downloads video (HLS/DASH
                    segments or a direct progressive file), and scrapes
                    page metadata for clip naming + the Play Info sidecar
+  content.js         Watches the page live for which play is on screen,
+                       so each downloaded clip gets its own correct play
+                       number instead of a positional guess
 downloader/      remux.js — merges downloaded HLS/DASH segments into one MP4
                    (not needed for a direct progressive-file download)
 
@@ -263,18 +266,45 @@ clip name and, where available, a `.meta.json` sidecar of play data:
 **Download All and per-clip play numbers.** The toolbar above only ever
 describes the one clip currently loaded in the player — fine for a single
 **Download**, but for **Download All** every clip in the batch would
-otherwise get a copy of that same one clip's play number. Hudl's
-play-by-play grid (the data table in the Video module's sidebar, one row per
-play, same fields as columns) fixes this: each detected stream is paired
-with the grid row at the *same position* — the 1st stream downloaded with
-the 1st row, the 2nd with the 2nd, and so on — so each clip gets its own
-`PLAY #` and fields read directly from its own row, not a shared snapshot.
-This assumes streams are detected in the same order the plays are listed in
-the grid, which holds if you review a game in order (the normal way) but
-isn't a guarantee the extension can verify — if a batch download comes out
-with plays numbered out of order, that's why, and a clip whose row wasn't
-available (grid virtualizes rows — very long games may not have every row
-rendered) falls back to an index suffix rather than a wrong play number.
+otherwise get a copy of that same one clip's play number. This is solved in
+two layers, in priority order:
+
+1. **Real-time correlation (the actual fix).** `extension/content.js` runs
+   continuously in the page — not just once at download time — watching
+   Hudl's per-clip data fields with a `MutationObserver` and reporting the
+   current `PLAY #` to the background service worker the instant it
+   changes. Every detected video request gets tagged with whatever that
+   live report most recently said, at the moment the request fired. This
+   is reading the same field the toolbar itself is driven by, tied to the
+   one event that actually determines which play a given stream belongs
+   to — not an assumption about order. It's specifically what makes a play
+   with more than one camera angle work correctly: two video requests
+   fired back-to-back for the *same* play (Wide + End Zone) both get
+   tagged with that same play's number, because the toolbar hadn't changed
+   between them.
+2. **Position-based fallback.** If no real-time snapshot exists for a
+   stream (the extension was reloaded, or content.js hadn't loaded yet
+   when that request fired), it falls back to Hudl's play-by-play grid
+   (the data table in the Video module's sidebar, one row per play, same
+   fields as columns) matched by *position* — the 1st stream with the 1st
+   row, the 2nd with the 2nd, and so on. This one genuinely is an
+   assumption (stream detection order matches the grid's row order) and
+   can misalign — under multiple camera angles per play especially, since
+   that consumes two stream slots for one grid row. It exists only to
+   cover the case where the real-time source isn't available; it's not
+   the primary mechanism.
+
+Verified both layers directly: reconstructed a request sequence — two
+streams for the same play (simulating two camera angles) with no toolbar
+change between them, then a third stream after the toolbar changed to the
+next play — and confirmed the first two both correctly resolve to the first
+play's number and the third resolves to the next one, which is exactly
+where position-based pairing alone would have gotten it wrong (it would
+have assigned the second angle to the *next* play, and every play after
+that would cascade one off from there).
+
+A clip with neither a real-time snapshot nor an available grid row falls
+back to an index suffix, never a wrong play number.
 
 ### Generating a test clip
 
@@ -301,13 +331,14 @@ ffmpeg -f lavfi -i "testsrc=duration=10:size=960x540:rate=30" \
   `clip-preview-*-field` extraction instead, confirmed against real markup.
 - **Download All**'s concurrency of 2 is a starting guess, not something
   tuned against how Hudl's server actually responds under load.
-- Per-clip play numbers in **Download All** are matched to Hudl's
-  play-by-play grid by position (stream N ↔ grid row N) — see [Clip
-  naming](#clip-naming) — which assumes streams were detected in the same
-  order the plays are listed. Verified against a reconstructed grid
-  fragment with correctly-ordered rows; not yet confirmed against a page
-  where clips were viewed out of order or where the grid's virtualization
-  drops a row that's off-screen.
+- Per-clip play numbers in **Download All** now come from a real-time
+  `content.js` observer, not positional guessing — see [Clip
+  naming](#clip-naming) for how, and for the remaining, much narrower
+  timing assumption it still relies on (that the toolbar update from
+  switching plays lands before that play's video request fires — true in
+  ordinary use, not something instrumented/guaranteed frame-by-frame). The
+  position-based grid-row pairing is now only a fallback for when no
+  real-time snapshot exists at all.
 
 ## Responsible use
 

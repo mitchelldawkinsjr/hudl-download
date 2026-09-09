@@ -168,17 +168,34 @@ async function fetchPageMeta(tabId) {
   return meta;
 }
 
-// Builds a name + a per-clip metadata snapshot from page-level meta. Pass
-// rowIndex to prefer that specific play's row from the grid table (see
-// extractHudlMetadata) over the single "currently loaded" toolbar snapshot
-// -- for a batch of clips, each one needs its own play data, not whichever
-// clip happened to be on screen when the batch started.
-function nameAndMetaFor(meta, rowIndex) {
+function playLabelFromFields(fields) {
+  return fields && fields['PLAY #'] ? 'Play-' + fields['PLAY #'] : null;
+}
+
+// Builds a name + a per-clip metadata snapshot for one stream, in priority
+// order:
+//  1. streamSnapshot -- content.js's real-time read of the toolbar at the
+//     exact moment this stream's own network request fired (see
+//     background.js's currentPlayByTab). This is the accurate source: it's
+//     reading the same field the toolbar itself is driven by, tied to the
+//     one event that actually matters for this specific stream.
+//  2. meta.gridRows[rowIndex] -- the play-by-play grid's row at this
+//     stream's position in the detected-stream list. Only a fallback: it
+//     assumes stream order matches row order, which a real-time snapshot
+//     doesn't need to assume (used when the extension was reloaded, or
+//     content.js hadn't reported yet, when this stream was detected).
+//  3. meta.fields / meta.playLabel -- the single "currently loaded"
+//     toolbar snapshot, same as a plain Download uses.
+function nameAndMetaFor(meta, rowIndex, streamSnapshot) {
   let fields = meta.fields;
   let playLabel = meta.playLabel;
-  if (rowIndex != null && meta.gridRows && meta.gridRows[rowIndex]) {
+
+  if (streamSnapshot && streamSnapshot.fields && Object.keys(streamSnapshot.fields).length) {
+    fields = streamSnapshot.fields;
+    playLabel = playLabelFromFields(fields);
+  } else if (rowIndex != null && meta.gridRows && meta.gridRows[rowIndex]) {
     fields = meta.gridRows[rowIndex];
-    playLabel = fields['PLAY #'] ? 'Play-' + fields['PLAY #'] : null;
+    playLabel = playLabelFromFields(fields);
   }
 
   const parts = [];
@@ -190,9 +207,9 @@ function nameAndMetaFor(meta, rowIndex) {
   return { name: parts.length ? parts.join('-') : 'clip', meta: perClipMeta };
 }
 
-async function buildClipName(tabId) {
+async function buildClipName(tabId, streamSnapshot) {
   const meta = await fetchPageMeta(tabId);
-  return nameAndMetaFor(meta, null);
+  return nameAndMetaFor(meta, null, streamSnapshot);
 }
 
 // Runs up to `limit` workers over `items` concurrently, rather than either
@@ -298,7 +315,7 @@ async function runWithConcurrency(items, limit, worker) {
     row.querySelector('button').addEventListener('click', async (e) => {
       const btn = e.target;
       btn.disabled = true;
-      const { name, meta } = await buildClipName(tab.id);
+      const { name, meta } = await buildClipName(tab.id, s.playSnapshot);
       nameHint.textContent = 'Naming as: ' + name + (meta.playLabel ? '' : ' (no play number found on page — using page title + video id)');
       startJob(s, name, label, meta);
     });
@@ -327,13 +344,13 @@ async function runWithConcurrency(items, limit, worker) {
 
       await runWithConcurrency(streams, 2, async (s, i) => {
         const label = typeLabels[s.type] || s.type;
-        // Each stream is paired with the play at the same position in the
-        // grid table (row i <-> stream i) so it gets its own play number
-        // and fields, not a copy of whichever clip was on screen when the
-        // batch started. Falls back to an index suffix (not a copy of
-        // another clip's name) when that row isn't available, so clips
-        // still never collide.
-        const { name: rowName, meta: rowMeta } = nameAndMetaFor(meta, i);
+        // Each stream gets its own play data -- preferring the real-time
+        // snapshot captured when its request fired (see nameAndMetaFor),
+        // falling back to its position in the play-by-play grid, so it's
+        // not a copy of whichever clip was on screen when the batch
+        // started. Falls back further to an index suffix (not a wrong
+        // play number) when neither source is available.
+        const { name: rowName, meta: rowMeta } = nameAndMetaFor(meta, i, s.playSnapshot);
         const finalName = rowMeta.playLabel ? rowName : `${rowName}-${i + 1}`;
         await startJob(s, finalName, label, rowMeta, baseName);
         done++;

@@ -1,7 +1,16 @@
 importScripts('m3u8.js');
 
-// tabId -> [{ url, type, time }]
+// tabId -> [{ url, type, time, playSnapshot }]
 const streamsByTab = {};
+
+// tabId -> { playNumber, fields, time } -- the most recently reported
+// "currently active" play, from content.js watching the page's own
+// per-clip data fields live. Used to tag each detected stream with
+// whatever play was actually on screen at that exact moment, instead of
+// assuming stream order matches the play-by-play grid's row order (which
+// breaks if a play requests more than one camera angle, or if plays are
+// viewed out of order).
+const currentPlayByTab = {};
 
 // Not every platform delivers video as an HLS/DASH manifest -- some (Hudl
 // included, based on the direct .mp4 paths in its own page-export data)
@@ -29,7 +38,10 @@ chrome.webRequest.onBeforeRequest.addListener(
     if (!type) return;
     const list = streamsByTab[details.tabId] || (streamsByTab[details.tabId] = []);
     if (!list.some((s) => s.url === details.url)) {
-      list.push({ url: details.url, type, time: Date.now() });
+      // Whatever content.js most recently reported for this tab, captured
+      // right now -- this is the real-time correlation, not a guess.
+      const playSnapshot = currentPlayByTab[details.tabId] || null;
+      list.push({ url: details.url, type, time: Date.now(), playSnapshot });
       chrome.action.setBadgeText({ tabId: details.tabId, text: String(list.length) });
       chrome.action.setBadgeBackgroundColor({ tabId: details.tabId, color: '#ff6a1a' });
     }
@@ -39,6 +51,7 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   delete streamsByTab[tabId];
+  delete currentPlayByTab[tabId];
 });
 
 function slugify(s) {
@@ -184,6 +197,13 @@ async function runJob(jobId, manifestUrl, title, streamType, playInfo, sharedFol
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg.type === 'current-play') {
+    const tabId = sender.tab && sender.tab.id;
+    if (tabId != null) {
+      currentPlayByTab[tabId] = { playNumber: msg.playNumber, fields: msg.fields, time: msg.time };
+    }
+    return;
+  }
   if (msg.type === 'get-streams') {
     sendResponse({ streams: streamsByTab[msg.tabId] || [] });
     return true;
