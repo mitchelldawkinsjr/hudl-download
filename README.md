@@ -41,10 +41,14 @@ it disappears, jump back to the note and it's there again.*
     that video.
 - **Snapshot export** — flattens the current frame + drawing into a PNG.
 - **Downloader** (`extension/` + `downloader/`) — a browser extension that
-  watches the current tab for HLS/DASH manifest requests and downloads the
-  segments through Chrome's own download manager (using your existing logged
-  -in session — the extension never sees your password), plus a Node script
-  that remuxes the segments into a single MP4 with `ffmpeg -c copy`.
+  watches the current tab for video the page is loading and downloads it
+  through Chrome's own download manager (using your existing logged-in
+  session — the extension never sees your password). It handles two delivery
+  styles: HLS/DASH manifests (segments get downloaded then merged with a
+  Node script that runs `ffmpeg -c copy`), and direct progressive video files
+  (downloaded as a single already-playable file, no merge step) — which is
+  what Hudl itself actually serves, based on the `.mp4` paths found in its
+  own page-export data.
 - **Hudl export importer** (`shared/hudl-import.js`) — parses a Chrome "Save
   Page As → Webpage, Complete" export of a Hudl presentation page (the
   `<name>.html` + `z/` folder format Hudl produces), resolving every
@@ -68,10 +72,15 @@ processing happens anywhere:
   drift out from under you mid-drawing.
 
 The downloader is a similarly thin layer: it doesn't touch video bytes
-either. `chrome.webRequest` observes manifest URLs, `chrome.downloads`
-transfers the actual segment files (through the browser's own network stack,
-so your session cookies apply automatically), and `ffmpeg -c copy` just
-concatenates them — no re-encoding.
+either. `chrome.webRequest` observes the tab's outgoing requests and
+classifies any it recognizes as video — `.m3u8`/`.mpd` manifests, a
+`.mp4`/`.m4v`/`.mov`/`.webm` file, or (for an opaque, extension-less CDN URL)
+anything Chrome itself tags as a `<video>`/`<audio>` element's own network
+fetch. `chrome.downloads` then transfers the actual file(s) through the
+browser's own network stack, so your session cookies apply automatically.
+Manifest-based streams get their segments merged afterward with
+`ffmpeg -c copy` (no re-encoding); a direct progressive file needs no merge
+step at all.
 
 ## Project layout
 
@@ -84,8 +93,10 @@ shared/          Player engine + Hudl-export parser, used by both apps
 web/             Zero-install web app (open web/index.html)
 electron/        Installable desktop app (Electron)
 
-extension/       Browser extension: detects & downloads HLS/DASH segments
-downloader/      remux.js — merges downloaded segments into one MP4
+extension/       Browser extension: detects & downloads video (HLS/DASH
+                   segments or a direct progressive file)
+downloader/      remux.js — merges downloaded HLS/DASH segments into one MP4
+                   (not needed for a direct progressive-file download)
 
 docs/            README assets (demo GIF)
 ```
@@ -175,6 +186,12 @@ ffmpeg -f lavfi -i "testsrc=duration=10:size=960x540:rate=30" \
   Hudl's own embedded coach telestrations alongside your own notes).
 - DASH/fragmented-MP4 (`.m4s`) segment support in the downloader — currently
   targets the more common `.ts`-segment HLS case.
+- The progressive-file detection path (added for platforms like Hudl that
+  serve direct `.mp4` files instead of HLS/DASH) is verified against the
+  URL-classification logic in isolation, but hasn't yet been confirmed
+  end-to-end against a real logged-in session — that requires a live test
+  someone runs themselves, since the extension can't be loaded or driven
+  through browser automation.
 
 ## Responsible use
 
