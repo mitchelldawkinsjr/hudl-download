@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  body {
+    width: 320px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 13px;
+    background: #14161a;
+    color: #e8eaed;
+    margin: 0;
+    padding: 12px;
+  }
+  h1 { font-size: 14px; margin: 0 0 8px; }
+  .hint { color: #9aa0ab; font-size: 11px; line-height: 1.4; margin-bottom: 10px; }
+  .stream {
+    background: #1c1f26;
+    border: 1px solid #333844;
+    border-radius: 6px;
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+  .stream .url {
+    font-size: 10px;
+    color: #9aa0ab;
+    word-break: break-all;
+    margin-bottom: 6px;
+  }
+  button {
+    background: #ff6a1a;
+    border: none;
+    color: #1a1a1a;
+    font-weight: 600;
+    padding: 6px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #progress { margin-top: 10px; font-size: 12px; }
+  .bar {
+    height: 6px;
+    background: #262a33;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .bar-fill { height: 100%; background: #ff6a1a; width: 0%; }
+  .error { color: #ff6a6a; }
+</style>
+</head>
+<body>
+  <h1>Film Room Downloader</h1>
+  <div class="hint">
+    Detected video streams on this tab. Runs inside your existing logged-in
+    session — nothing is scraped without you clicking Download.
+  </div>
+  <div id="list"></div>
+  <div id="progress"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# dependencies / build output
+node_modules/
+dist/
+*.log
+
+# OS junk
+.DS_Store
+
+# local test fixtures (regenerate with the ffmpeg command in README)
+test-assets/
+
+# real exported film -- never commit actual game footage
+Start_WR*/
+*.telestration.json

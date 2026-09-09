@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Film Room</title>
+<link rel="stylesheet" href="../shared/player.css" />
+</head>
+<body>
+<div class="app">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h1>Film Room</h1>
+      <button class="btn primary" id="openFiles">Open Video Files…</button>
+      <label class="field">FPS
+        <select id="fpsSelect" class="speed-select">
+          <option value="24">24</option>
+          <option value="25">25</option>
+          <option value="30" selected>30</option>
+          <option value="60">60</option>
+        </select>
+      </label>
+    </div>
+    <div class="clip-list" id="clipList">
+      <div class="empty-hint">No clips loaded yet. Click "Open Video Files…" and pick MP4 files you've downloaded.</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="telestration-bar">
+      <button class="btn small" data-tool="pen" title="Pen">✏️ Pen</button>
+      <button class="btn small" data-tool="line" title="Line">／ Line</button>
+      <button class="btn small" data-tool="arrow" title="Arrow">➜ Arrow</button>
+      <button class="btn small" data-tool="rect" title="Rectangle">▭ Rect</button>
+      <button class="btn small" data-tool="ellipse" title="Ellipse">◯ Ellipse</button>
+      <div class="sep"></div>
+      <button class="color-swatch active" style="background:#ff3b30" data-color="#ff3b30"></button>
+      <button class="color-swatch" style="background:#ffcc00" data-color="#ffcc00"></button>
+      <button class="color-swatch" style="background:#34c759" data-color="#34c759"></button>
+      <button class="color-swatch" style="background:#0a84ff" data-color="#0a84ff"></button>
+      <button class="color-swatch" style="background:#ffffff" data-color="#ffffff"></button>
+      <input type="range" class="width-slider" id="lineWidth" min="1" max="16" value="4" />
+      <div class="sep"></div>
+      <button class="btn small" id="undoBtn">Undo</button>
+      <button class="btn small" id="clearBtn">Clear Note</button>
+      <button class="btn small" id="snapshotBtn">Save Snapshot</button>
+    </div>
+
+    <div class="notes-bar">
+      <span class="notes-label">Notes</span>
+      <div class="notes-chips" id="notesChips"></div>
+      <div class="spacer"></div>
+      <span class="notes-label" id="notesSaveStatus"></span>
+    </div>
+
+    <div class="video-stage">
+      <div class="video-wrap">
+        <video id="video" playsinline></video>
+        <canvas id="overlay"></canvas>
+        <div class="video-placeholder" id="placeholder">Open a video file to start reviewing film</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="seek-row">
+        <span class="time-label" id="timeLabel">00:00 / 00:00</span>
+        <input type="range" id="seekBar" min="0" max="1000" value="0" />
+      </div>
+      <div class="transport-row">
+        <button class="btn" id="frameBack" title="Previous frame">⏮ Frame</button>
+        <button class="btn" id="skipBack" title="Back 5s">« 5s</button>
+        <button class="btn primary" id="playPause">Play</button>
+        <button class="btn" id="skipFwd" title="Forward 5s">5s »</button>
+        <button class="btn" id="frameFwd" title="Next frame">Frame ⏭</button>
+        <div class="spacer"></div>
+        <label class="field">Speed
+          <select id="speedSelect" class="speed-select">
+            <option value="0.1">0.1x</option>
+            <option value="0.25">0.25x (slo-mo)</option>
+            <option value="0.5">0.5x</option>
+            <option value="0.75">0.75x</option>
+            <option value="1" selected>1x</option>
+            <option value="1.5">1.5x</option>
+            <option value="2">2x</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/player.js"></script>
+<script>
+(function () {
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('overlay');
+  const placeholder = document.getElementById('placeholder');
+  const player = new TelestrationPlayer({ video, canvas });
+
+  function pathToFileUrl(p) {
+    return 'file://' + encodeURI(p).replace(/#/g, '%23');
+  }
+
+  // ---- library ----
+  const clipList = document.getElementById('clipList');
+  const clips = []; // { name, url, path }
+  let activeIndex = -1;
+  const notesSaveStatus = document.getElementById('notesSaveStatus');
+
+  async function loadNotesForActiveClip() {
+    const clip = clips[activeIndex];
+    if (!clip) return;
+    try {
+      const data = await window.electronAPI.readNotes(clip.path);
+      if (data) {
+        player.loadNotes(data);
+        return;
+      }
+    } catch (e) {}
+    player.clearAllNotes();
+  }
+
+  let saveTimer = null;
+  function saveNotesForActiveClip() {
+    const clip = clips[activeIndex];
+    if (!clip) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      try {
+        await window.electronAPI.writeNotes(clip.path, player.serializeNotes());
+        notesSaveStatus.textContent = 'Saved';
+        setTimeout(() => { notesSaveStatus.textContent = ''; }, 1500);
+      } catch (e) {
+        notesSaveStatus.textContent = 'Save failed';
+      }
+    }, 300);
+  }
+
+  function renderClips() {
+    clipList.innerHTML = '';
+    if (clips.length === 0) {
+      clipList.innerHTML = '<div class="empty-hint">No clips loaded yet. Click "Open Video Files…" and pick MP4 files you\'ve downloaded.</div>';
+      return;
+    }
+    clips.forEach((clip, i) => {
+      const el = document.createElement('div');
+      el.className = 'clip-item' + (i === activeIndex ? ' active' : '');
+      el.textContent = clip.name;
+      el.addEventListener('click', () => selectClip(i));
+      clipList.appendChild(el);
+    });
+  }
+
+  function selectClip(i) {
+    activeIndex = i;
+    placeholder.style.display = 'none';
+    player.load(clips[i].url);
+    loadNotesForActiveClip();
+    renderClips();
+  }
+
+  document.getElementById('openFiles').addEventListener('click', async () => {
+    const paths = await window.electronAPI.openFiles();
+    paths.forEach((p) => {
+      const name = p.split(/[\\/]/).pop();
+      clips.push({ name, url: pathToFileUrl(p), path: p });
+    });
+    renderClips();
+    if (activeIndex === -1 && clips.length) selectClip(0);
+  });
+
+  // ---- transport controls ----
+  const playPause = document.getElementById('playPause');
+  video.addEventListener('play', () => (playPause.textContent = 'Pause'));
+  video.addEventListener('pause', () => (playPause.textContent = 'Play'));
+  playPause.addEventListener('click', () => player.togglePlay());
+
+  document.getElementById('skipBack').addEventListener('click', () => player.seekBy(-5));
+  document.getElementById('skipFwd').addEventListener('click', () => player.seekBy(5));
+  document.getElementById('frameBack').addEventListener('click', () => player.stepFrame(-1));
+  document.getElementById('frameFwd').addEventListener('click', () => player.stepFrame(1));
+
+  document.getElementById('speedSelect').addEventListener('change', (e) => {
+    player.setSpeed(parseFloat(e.target.value));
+  });
+  document.getElementById('fpsSelect').addEventListener('change', (e) => {
+    player.setFps(parseInt(e.target.value, 10));
+  });
+
+  function fmt(t) {
+    if (!isFinite(t)) return '00:00';
+    const m = Math.floor(t / 60).toString().padStart(2, '0');
+    const s = Math.floor(t % 60).toString().padStart(2, '0');
+    return m + ':' + s;
+  }
+
+  const seekBar = document.getElementById('seekBar');
+  const timeLabel = document.getElementById('timeLabel');
+  let seeking = false;
+
+  video.addEventListener('timeupdate', () => {
+    if (seeking) return;
+    const d = video.duration || 0;
+    seekBar.value = d ? Math.round((video.currentTime / d) * 1000) : 0;
+    timeLabel.textContent = fmt(video.currentTime) + ' / ' + fmt(d);
+  });
+
+  seekBar.addEventListener('input', () => {
+    seeking = true;
+    player.seekToFraction(seekBar.value / 1000);
+  });
+  seekBar.addEventListener('change', () => {
+    seeking = false;
+  });
+
+  // ---- telestration controls ----
+  document.querySelectorAll('[data-tool]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-tool]').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      player.setTool(btn.dataset.tool);
+    });
+  });
+  document.querySelector('[data-tool="pen"]').classList.add('active');
+
+  document.querySelectorAll('.color-swatch').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.color-swatch').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      player.setColor(btn.dataset.color);
+    });
+  });
+
+  document.getElementById('lineWidth').addEventListener('input', (e) => {
+    player.setLineWidth(parseInt(e.target.value, 10));
+  });
+
+  document.getElementById('undoBtn').addEventListener('click', () => player.undo());
+  document.getElementById('clearBtn').addEventListener('click', () => player.clearVisibleNote());
+  document.getElementById('snapshotBtn').addEventListener('click', () => {
+    const dataUrl = player.snapshot();
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    const name = (clips[activeIndex] && clips[activeIndex].name.replace(/\.[^.]+$/, '')) || 'clip';
+    a.download = name + '-snapshot.png';
+    a.click();
+  });
+
+  // ---- notes: timestamped telestrations (auto-saved to a sidecar file
+  // next to the video) ----
+  const notesChips = document.getElementById('notesChips');
+  let currentNotes = [];
+
+  function fmtMs(ms) {
+    const total = ms / 1000;
+    const m = Math.floor(total / 60).toString().padStart(2, '0');
+    const s = (total % 60).toFixed(1).padStart(4, '0');
+    return m + ':' + s;
+  }
+
+  function renderNoteChips() {
+    notesChips.innerHTML = '';
+    if (!currentNotes.length) {
+      notesChips.innerHTML = '<span class="notes-label">None yet — draw while paused to create one.</span>';
+      return;
+    }
+    const nowMs = video.currentTime * 1000;
+    currentNotes.forEach((n) => {
+      const chip = document.createElement('button');
+      chip.className = 'note-chip' + (Math.abs(n.timeMs - nowMs) < 200 ? ' active' : '');
+      chip.textContent = fmtMs(n.timeMs) + ' (' + n.strokeCount + ')';
+      chip.addEventListener('click', () => player.seekToMs(n.timeMs));
+      notesChips.appendChild(chip);
+    });
+  }
+
+  player.onNotesChanged = (notes) => {
+    currentNotes = notes;
+    renderNoteChips();
+    saveNotesForActiveClip();
+  };
+  video.addEventListener('timeupdate', renderNoteChips);
+  video.addEventListener('seeked', renderNoteChips);
+  renderNoteChips();
+
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+    if (e.code === 'Space') { e.preventDefault(); player.togglePlay(); }
+    if (e.code === 'ArrowLeft') player.stepFrame(-1);
+    if (e.code === 'ArrowRight') player.stepFrame(1);
+  });
+})();
+</script>
+</body>
+</html>
