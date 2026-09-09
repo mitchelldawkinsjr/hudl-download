@@ -157,7 +157,10 @@ quarantines it), delete `electron/node_modules/electron` and re-run
    authorized to view), start playback so the video's manifest loads, then
    click the extension icon.
 4. Click **Download** next to the detected stream. Segments save under
-   `Downloads/FilmRoomDownloads/<title>/`.
+   `Downloads/FilmRoomDownloads/<name>/`, where `<name>` is built from
+   whatever identifying info it can find on the page (see
+   [Clip naming](#clip-naming) below) — the popup shows exactly what it
+   picked ("Naming as: …") before the download starts.
 5. Run the remux script on that folder:
 
 ```bash
@@ -166,6 +169,32 @@ node downloader/remux.js "~/Downloads/FilmRoomDownloads/<title>"
 
 This produces `output.mp4` in that same folder — open it in the Film Room
 player.
+
+### Clip naming
+
+Since a page title alone ("Hudl", say) isn't enough to tell clips apart, the
+extension runs a small script in the page itself (via
+`chrome.scripting.executeScript`) right before each download to build a
+better name, in priority order:
+
+1. A visible **"Play N"**-style label — first checked on whatever element
+   looks like the currently-selected item in a list (`.active`,
+   `.selected`, `aria-current`, …), then as a fallback anywhere in the
+   page's visible text, then as a further fallback inside any inline
+   `<script>` JSON blob using a `playNumber`/`playIndex` key. This is a
+   generic heuristic, not something built against Hudl's actual markup — it
+   works or it doesn't depending on how a given page happens to render.
+2. The page's `<title>`, if no play number was found.
+3. The clip's **video ID**, read from the page URL's `?v=` query parameter
+   (e.g. `.../analyze?v=97953713&...`) — this part is always reliable
+   (Hudl's own URL scheme, not a guess) and is always appended, so clips
+   never collide even when no play number is found.
+
+If a download comes out named just `clip-v<id>.mp4` (no play number), that
+means the page didn't have anything the heuristic recognized — if you can
+share what the play-number indicator actually looks like on the page (e.g.
+right-click → Inspect on it), I can target the selector directly instead of
+guessing.
 
 ### Generating a test clip
 

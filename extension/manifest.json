@@ -3,7 +3,7 @@
   "name": "Film Room Downloader",
   "version": "0.1.0",
   "description": "Detects the HLS/DASH video stream on the current tab and saves its segments locally so the companion remux script can build an MP4. Uses your existing logged-in session — no credentials handled by the extension.",
-  "permissions": ["webRequest", "downloads", "storage", "activeTab"],
+  "permissions": ["webRequest", "downloads", "storage", "activeTab", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
