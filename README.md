@@ -260,6 +260,22 @@ clip name and, where available, a `.meta.json` sidecar of play data:
    above — reliable since it's Hudl's own URL scheme, not a guess — so
    clips never collide even without a play number.
 
+**Download All and per-clip play numbers.** The toolbar above only ever
+describes the one clip currently loaded in the player — fine for a single
+**Download**, but for **Download All** every clip in the batch would
+otherwise get a copy of that same one clip's play number. Hudl's
+play-by-play grid (the data table in the Video module's sidebar, one row per
+play, same fields as columns) fixes this: each detected stream is paired
+with the grid row at the *same position* — the 1st stream downloaded with
+the 1st row, the 2nd with the 2nd, and so on — so each clip gets its own
+`PLAY #` and fields read directly from its own row, not a shared snapshot.
+This assumes streams are detected in the same order the plays are listed in
+the grid, which holds if you review a game in order (the normal way) but
+isn't a guarantee the extension can verify — if a batch download comes out
+with plays numbered out of order, that's why, and a clip whose row wasn't
+available (grid virtualizes rows — very long games may not have every row
+rendered) falls back to an index suffix rather than a wrong play number.
+
 ### Generating a test clip
 
 If you don't have real footage handy, this makes a 10-second synthetic
@@ -285,11 +301,13 @@ ffmpeg -f lavfi -i "testsrc=duration=10:size=960x540:rate=30" \
   `clip-preview-*-field` extraction instead, confirmed against real markup.
 - **Download All**'s concurrency of 2 is a starting guess, not something
   tuned against how Hudl's server actually responds under load.
-- The ag-Grid play-by-play table visible in Hudl's sidebar (all 8 clips at
-  once, same fields as columns) isn't scraped — only the current clip's
-  toolbar is. Would need mapping ag-Grid's `col-id` attributes to their
-  header text, which the toolbar fields make unnecessary for the common
-  case (metadata for the clip you're actually downloading).
+- Per-clip play numbers in **Download All** are matched to Hudl's
+  play-by-play grid by position (stream N ↔ grid row N) — see [Clip
+  naming](#clip-naming) — which assumes streams were detected in the same
+  order the plays are listed. Verified against a reconstructed grid
+  fragment with correctly-ordered rows; not yet confirmed against a page
+  where clips were viewed out of order or where the grid's virtualization
+  drops a row that's off-screen.
 
 ## Responsible use
 

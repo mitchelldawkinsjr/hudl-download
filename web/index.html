@@ -17,9 +17,13 @@
   <div class="sidebar">
     <div class="sidebar-header">
       <h1>Film Room</h1>
-      <button class="btn primary" id="openFiles">Open Video Files…</button>
+      <div style="display:flex;gap:6px;">
+        <button class="btn primary" id="openFolder" style="flex:1;">Open Folder…</button>
+        <button class="btn" id="openFiles" style="flex:1;">Open Files…</button>
+      </div>
       <input type="file" id="fileInput" accept="video/*,.json,application/json" multiple hidden />
-      <span style="font-size:11px;color:var(--text-dim);line-height:1.4;">Selecting a clip's <code>.meta.json</code> alongside it shows its Play Info.</span>
+      <input type="file" id="folderInput" webkitdirectory directory multiple hidden />
+      <span style="font-size:11px;color:var(--text-dim);line-height:1.4;">"Open Folder…" loads a whole <code>FilmRoomDownloads/…</code> folder from the extension in one go — clips and their <code>.meta.json</code> Play Info come in together.</span>
       <label class="field">FPS
         <select id="fpsSelect" class="speed-select">
           <option value="24">24</option>
@@ -30,7 +34,7 @@
       </label>
     </div>
     <div class="clip-list" id="clipList">
-      <div class="empty-hint">No clips loaded yet. Click "Open Video Files…" and pick MP4 files you've downloaded. Nothing leaves your browser — files are read locally.</div>
+      <div class="empty-hint">No clips loaded yet. Click "Open Folder…" and pick the FilmRoomDownloads folder you downloaded (or "Open Files…" for individual clips). Nothing leaves your browser — files are read locally.</div>
     </div>
     <div class="play-info" id="playInfo" hidden></div>
   </div>
@@ -157,7 +161,7 @@
   function renderClips() {
     clipList.innerHTML = '';
     if (clips.length === 0) {
-      clipList.innerHTML = '<div class="empty-hint">No clips loaded yet. Click "Open Video Files…" and pick MP4 files you\'ve downloaded.</div>';
+      clipList.innerHTML = '<div class="empty-hint">No clips loaded yet. Click "Open Folder…" and pick the FilmRoomDownloads folder you downloaded.</div>';
       return;
     }
     clips.forEach((clip, i) => {
@@ -178,14 +182,21 @@
     renderClips();
   }
 
-  document.getElementById('openFiles').addEventListener('click', () => {
-    document.getElementById('fileInput').click();
-  });
+  const VIDEO_EXT_RE = /\.(mp4|m4v|mov|webm|mkv)$/i;
 
-  document.getElementById('fileInput').addEventListener('change', async (e) => {
-    const files = Array.from(e.target.files || []);
+  // Shared by both pickers: a plain multi-file select (files may be
+  // anything the accept filter let through) and a whole-folder select
+  // (webkitdirectory hands back every file under the folder, recursively,
+  // with no extension filtering at all -- so this always filters by
+  // extension itself rather than trusting the source).
+  async function handleFileList(fileList) {
+    const files = Array.from(fileList || []);
     const metaFiles = files.filter((f) => /\.meta\.json$/i.test(f.name));
-    const videoFiles = files.filter((f) => !/\.meta\.json$/i.test(f.name));
+    const videoFiles = files.filter((f) => VIDEO_EXT_RE.test(f.name));
+    // Folder selects don't come back in a guaranteed order across
+    // OSes/browsers; sort each incoming batch so e.g. Play-2 comes before
+    // Play-10 in the sidebar.
+    videoFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
     for (const f of metaFiles) {
       try {
@@ -203,6 +214,21 @@
     renderClips();
     if (activeIndex === -1 && clips.length) selectClip(0);
     else renderPlayInfoForActive(); // meta may have arrived after its video was already active
+  }
+
+  document.getElementById('openFiles').addEventListener('click', () => {
+    document.getElementById('fileInput').click();
+  });
+  document.getElementById('openFolder').addEventListener('click', () => {
+    document.getElementById('folderInput').click();
+  });
+
+  document.getElementById('fileInput').addEventListener('change', (e) => {
+    handleFileList(e.target.files);
+    e.target.value = '';
+  });
+  document.getElementById('folderInput').addEventListener('change', (e) => {
+    handleFileList(e.target.files);
     e.target.value = '';
   });
 

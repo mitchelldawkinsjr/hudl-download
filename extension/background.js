@@ -93,31 +93,40 @@ async function savePlayInfo(folder, filenameBase, playInfo) {
   await downloadFile(toDataUrl(JSON.stringify(payload, null, 2)), `${folder}/${filenameBase}.meta.json`);
 }
 
-async function runProgressiveJob(jobId, fileUrl, title, post, playInfo) {
-  const folder = 'FilmRoomDownloads/' + slugify(title);
+async function runProgressiveJob(jobId, fileUrl, folder, fileBase, post, playInfo) {
   const ext = (fileUrl.split('?')[0].match(/\.(\w+)$/) || [, 'mp4'])[1];
   post({ status: 'downloading', done: 0, total: 1 });
-  await downloadFile(fileUrl, `${folder}/${slugify(title)}.${ext}`);
+  await downloadFile(fileUrl, `${folder}/${fileBase}.${ext}`);
   post({ status: 'downloading', done: 1, total: 1 });
-  await savePlayInfo(folder, slugify(title), playInfo);
+  await savePlayInfo(folder, fileBase, playInfo);
   // No manifest, no segments -- it's already a single playable file, so
   // there's nothing for remux.js to do.
   post({ status: 'done', folder, noRemuxNeeded: true });
 }
 
-async function runJob(jobId, manifestUrl, title, streamType, playInfo) {
+// `sharedFolder`, when set (by "Download All"), names one folder that every
+// stream from that run gets saved into together -- so the whole batch (clips
+// + .meta.json sidecars) is a single folder the Film Room web viewer can
+// load in one "Open Folder…" pick, rather than one folder per stream.
+async function runJob(jobId, manifestUrl, title, streamType, playInfo, sharedFolder) {
   const post = (patch) => chrome.runtime.sendMessage({ type: 'job-progress', jobId, ...patch }).catch(() => {});
+  const fileBase = slugify(title);
+  const folder = 'FilmRoomDownloads/' + (sharedFolder ? slugify(sharedFolder) : fileBase);
 
   if (streamType === 'progressive') {
     try {
-      await runProgressiveJob(jobId, manifestUrl, title, post, playInfo);
+      await runProgressiveJob(jobId, manifestUrl, folder, fileBase, post, playInfo);
     } catch (err) {
       post({ status: 'error', message: String(err && err.message ? err.message : err) });
     }
     return;
   }
 
-  const folder = 'FilmRoomDownloads/' + slugify(title);
+  // HLS/DASH segments are named generically (seg-00000.ts, init.mp4, ...),
+  // so when several streams share one folder they get their own
+  // fileBase-named subfolder to avoid colliding with each other; a lone
+  // download just uses its folder directly, unchanged from before.
+  const segFolder = sharedFolder ? `${folder}/${fileBase}` : folder;
   try {
     post({ status: 'fetching-manifest' });
     let text = await fetch(manifestUrl, { credentials: 'include' }).then((r) => r.text());
@@ -144,7 +153,7 @@ async function runJob(jobId, manifestUrl, title, streamType, playInfo) {
     if (initUrl) {
       const ext = (initUrl.split('?')[0].match(/\.(\w+)$/) || [, 'mp4'])[1];
       const name = `init.${ext}`;
-      await downloadFile(initUrl, `${folder}/${name}`);
+      await downloadFile(initUrl, `${segFolder}/${name}`);
       localNames.push(name);
       done += 1;
       post({ status: 'downloading', done, total });
@@ -154,7 +163,7 @@ async function runJob(jobId, manifestUrl, title, streamType, playInfo) {
       const segUrl = segments[i];
       const ext = (segUrl.split('?')[0].match(/\.(\w+)$/) || [, 'ts'])[1];
       const name = `seg-${String(i).padStart(5, '0')}.${ext}`;
-      await downloadFile(segUrl, `${folder}/${name}`);
+      await downloadFile(segUrl, `${segFolder}/${name}`);
       localNames.push(name);
       done += 1;
       post({ status: 'downloading', done, total });
@@ -164,11 +173,11 @@ async function runJob(jobId, manifestUrl, title, streamType, playInfo) {
       .filter((n) => !n.startsWith('init.'))
       .map((n) => `file '${n}'`)
       .join('\n') + '\n';
-    await downloadFile(toDataUrl(concatList), `${folder}/concat_list.txt`);
+    await downloadFile(toDataUrl(concatList), `${segFolder}/concat_list.txt`);
     // Named to match remux.js's default output filename (output.mp4).
-    await savePlayInfo(folder, 'output', playInfo);
+    await savePlayInfo(segFolder, 'output', playInfo);
 
-    post({ status: 'done', folder });
+    post({ status: 'done', folder: segFolder });
   } catch (err) {
     post({ status: 'error', message: String(err && err.message ? err.message : err) });
   }
@@ -186,7 +195,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
   if (msg.type === 'start-job') {
-    runJob(msg.jobId, msg.manifestUrl, msg.title, msg.streamType, msg.playInfo);
+    runJob(msg.jobId, msg.manifestUrl, msg.title, msg.streamType, msg.playInfo, msg.folder);
     sendResponse({ ok: true });
     return true;
   }

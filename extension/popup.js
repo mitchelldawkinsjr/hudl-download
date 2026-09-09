@@ -9,6 +9,7 @@ function extractHudlMetadata() {
     pageTitle: document.title || null,
     tables: [],
     fields: {},
+    gridRows: [],
   };
 
   try {
@@ -34,6 +35,48 @@ function extractHudlMetadata() {
     if (value && value !== '-') result.fields[name] = value.slice(0, 200);
   }
   if (result.fields['PLAY #']) result.playLabel = 'Play-' + result.fields['PLAY #'];
+
+  // 1b) The play-by-play grid (ag-Grid, in the Video module's sidebar) has
+  //     one row per play in the game, with the same fields as columns --
+  //     PLAY #, DN, DIST, OFF FORM, RESULT, etc. The toolbar above only
+  //     ever describes the ONE clip currently loaded in the player, so for
+  //     a batch of several clips ("Download All") it's the same data
+  //     repeated for every clip -- wrong for all but one of them. This
+  //     reads every visible row, in the grid's own row-index order, so a
+  //     given clip can be paired with its own play data by matching its
+  //     position among the detected streams to the same position among
+  //     these rows (see nameAndMetaFor in this file). ag-Grid virtualizes
+  //     rows, so only currently-rendered ones are captured -- fine for a
+  //     game-length list that fits without scrolling, incomplete for a
+  //     much longer one.
+  const grid = document.querySelector('[data-qa-id="ag-grid"]');
+  if (grid) {
+    const headerByColId = {};
+    grid.querySelectorAll('[role="columnheader"][col-id]').forEach((h) => {
+      const colId = h.getAttribute('col-id');
+      const text = (h.textContent || '').trim();
+      if (colId && text) headerByColId[colId] = text;
+    });
+
+    const rowsByIndex = new Map();
+    grid.querySelectorAll('[role="row"][row-index]').forEach((rowEl) => {
+      const cells = rowEl.querySelectorAll('[role="gridcell"][col-id]');
+      if (!cells.length) return;
+      const idx = parseInt(rowEl.getAttribute('row-index'), 10);
+      if (Number.isNaN(idx)) return;
+      const fields = {};
+      cells.forEach((cell) => {
+        const colId = cell.getAttribute('col-id');
+        const name = headerByColId[colId];
+        const value = (cell.textContent || '').trim();
+        if (name && value && value !== '-') fields[name] = value.slice(0, 200);
+      });
+      if (Object.keys(fields).length) rowsByIndex.set(idx, fields);
+    });
+
+    const maxIdx = rowsByIndex.size ? Math.max(...rowsByIndex.keys()) : -1;
+    for (let i = 0; i <= maxIdx; i++) result.gridRows.push(rowsByIndex.get(i) || null);
+  }
 
   // The rest only runs if the page didn't look like Hudl's clip-preview bar
   // -- generic, blind fallbacks for other sites.
@@ -110,8 +153,8 @@ function slugify(s) {
   return (s || '').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 }
 
-async function buildClipName(tabId) {
-  let meta = { videoId: null, playLabel: null, pageTitle: null };
+async function fetchPageMeta(tabId) {
+  let meta = { videoId: null, playLabel: null, pageTitle: null, fields: {}, tables: [], gridRows: [] };
   try {
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId },
@@ -122,13 +165,34 @@ async function buildClipName(tabId) {
   } catch (e) {
     // scripting can be refused on some pages -- fall back to whatever we have
   }
+  return meta;
+}
+
+// Builds a name + a per-clip metadata snapshot from page-level meta. Pass
+// rowIndex to prefer that specific play's row from the grid table (see
+// extractHudlMetadata) over the single "currently loaded" toolbar snapshot
+// -- for a batch of clips, each one needs its own play data, not whichever
+// clip happened to be on screen when the batch started.
+function nameAndMetaFor(meta, rowIndex) {
+  let fields = meta.fields;
+  let playLabel = meta.playLabel;
+  if (rowIndex != null && meta.gridRows && meta.gridRows[rowIndex]) {
+    fields = meta.gridRows[rowIndex];
+    playLabel = fields['PLAY #'] ? 'Play-' + fields['PLAY #'] : null;
+  }
 
   const parts = [];
-  if (meta.playLabel) parts.push(meta.playLabel);
+  if (playLabel) parts.push(playLabel);
   else if (meta.pageTitle) parts.push(slugify(meta.pageTitle));
   if (meta.videoId) parts.push('v' + meta.videoId);
 
-  return { name: parts.length ? parts.join('-') : 'clip', meta };
+  const perClipMeta = { videoId: meta.videoId, playLabel, pageTitle: meta.pageTitle, fields, tables: meta.tables };
+  return { name: parts.length ? parts.join('-') : 'clip', meta: perClipMeta };
+}
+
+async function buildClipName(tabId) {
+  const meta = await fetchPageMeta(tabId);
+  return nameAndMetaFor(meta, null);
 }
 
 // Runs up to `limit` workers over `items` concurrently, rather than either
@@ -206,7 +270,7 @@ async function runWithConcurrency(items, limit, worker) {
     });
   }
 
-  function startJob(stream, name, label, playInfo) {
+  function startJob(stream, name, label, playInfo, folder) {
     const jobId = 'job-' + Date.now() + '-' + jobCounter++;
     chrome.runtime.sendMessage({
       type: 'start-job',
@@ -215,6 +279,7 @@ async function runWithConcurrency(items, limit, worker) {
       streamType: stream.type,
       title: name,
       playInfo,
+      folder,
     });
     return trackJob(jobId, label);
   }
@@ -247,7 +312,11 @@ async function runWithConcurrency(items, limit, worker) {
       downloadAllBtn.disabled = true;
       document.querySelectorAll('.download-one').forEach((b) => (b.disabled = true));
 
-      const { name: baseName, meta } = await buildClipName(tab.id);
+      const meta = await fetchPageMeta(tab.id);
+      // The shared download folder is still named after whichever clip is
+      // currently loaded (or the page title) -- it's just a folder name,
+      // not attributed to any one play.
+      const { name: baseName } = nameAndMetaFor(meta, null);
       const summary = document.createElement('div');
       summary.className = 'hint';
       progressEl.appendChild(summary);
@@ -258,15 +327,20 @@ async function runWithConcurrency(items, limit, worker) {
 
       await runWithConcurrency(streams, 2, async (s, i) => {
         const label = typeLabels[s.type] || s.type;
-        // Every stream gets its own numbered name so they never collide,
-        // even if the page-level metadata (e.g. a play number) is
-        // identical across all of them.
-        await startJob(s, `${baseName}-${i + 1}`, label, meta);
+        // Each stream is paired with the play at the same position in the
+        // grid table (row i <-> stream i) so it gets its own play number
+        // and fields, not a copy of whichever clip was on screen when the
+        // batch started. Falls back to an index suffix (not a copy of
+        // another clip's name) when that row isn't available, so clips
+        // still never collide.
+        const { name: rowName, meta: rowMeta } = nameAndMetaFor(meta, i);
+        const finalName = rowMeta.playLabel ? rowName : `${rowName}-${i + 1}`;
+        await startJob(s, finalName, label, rowMeta, baseName);
         done++;
         update();
       });
 
-      summary.textContent = `All ${streams.length} streams downloaded.`;
+      summary.textContent = `All ${streams.length} streams downloaded to Downloads/FilmRoomDownloads/${slugify(baseName)}.`;
     });
   }
 })();
