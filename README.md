@@ -21,8 +21,11 @@ it disappears, jump back to the note and it's there again.*
 
 - **Playback controls** — play/pause, ±5s skip, previous/next frame, variable
   speed (0.1x–2x, for true slo-mo review), scrubbable seek bar.
-- **Timestamped telestration** — pen, line, arrow, rectangle, and ellipse
-  tools with color and stroke-width controls. Each note is tied to the video
+- **Timestamped telestration** — pen, line, arrow, rectangle, ellipse, and
+  text tools with color and stroke-width controls. The text tool places an
+  inline text box wherever you click on the video; type your note and press
+  Enter (or just click away) to stamp it onto the frame, outlined for
+  legibility over any background. Each note is tied to the video
   timestamp you drew it at: it's visible only while playback is at (or very
   near) that moment, and disappears the instant you move away — matching how
   coaches actually use freeze-frame diagrams.
@@ -65,6 +68,11 @@ it disappears, jump back to the note and it's there again.*
   video (web app) or just have it sitting next to the video file (Electron,
   auto-discovered) and the sidebar shows whatever the downloader captured
   for that play.
+- **Open Film Room Review…** — a button in the extension popup that opens
+  the Film Room web app in a new tab, no separate server or double-clicking
+  `web/index.html` required. From there, **Open Folder…** loads a whole
+  `FilmRoomDownloads/…` folder (clips + `.meta.json` sidecars) in one pick —
+  see [Downloader → Film Room, in one click](#downloader--film-room-in-one-click).
 - **Hudl export importer** (`shared/hudl-import.js`) — parses a Chrome "Save
   Page As → Webpage, Complete" export of a Hudl presentation page (the
   `<name>.html` + `z/` folder format Hudl produces), resolving every
@@ -130,6 +138,15 @@ extension/       Browser extension: detects & downloads video (HLS/DASH
   content.js         Watches the page live for which play is on screen,
                        so each downloaded clip gets its own correct play
                        number instead of a positional guess
+  web/, shared/       Symlinks to the top-level web/ and shared/ folders --
+                       an unpacked Chrome extension can only load resources
+                       from inside its own folder, so these let the popup's
+                       "Open Film Room Review…" button open web/index.html
+                       (chrome.runtime.getURL('web/index.html')) without
+                       duplicating the app inside extension/. Not meaningful
+                       outside a symlink-aware filesystem/checkout (e.g. a
+                       zip export) -- re-create them (see command below) if
+                       they ever come through as empty/broken.
 downloader/      remux.js — merges downloaded HLS/DASH segments into one MP4
                    (not needed for a direct progressive-file download)
 
@@ -213,10 +230,13 @@ quarantines it), delete `electron/node_modules/electron` and re-run
 3. Visit the video page you're logged into (in a tab you're legitimately
    authorized to view), start playback so the video's manifest loads, then
    click the extension icon.
-4. Click **Download** next to a detected stream, or **Download All** to grab
+4. Click **Open Film Room Review…** at the top of the popup any time to open
+   the player in a new tab — see [Downloader → Film Room, in one
+   click](#downloader--film-room-in-one-click) below.
+5. Click **Download** next to a detected stream, or **Download All** to grab
    every stream detected on the tab in one click (two at a time — see
    [How it works](#how-it-works)). Segments save under
-   `Downloads/FilmRoomDownloads/<mm-dd-yyyy_HH:mm>/<name>/`, where the first
+   `Downloads/FilmRoomDownloads/<mm-dd-yyyy_HH-mm>/<name>/`, where the first
    folder is when you clicked the download (so downloads started on
    different days land in clearly separate folders — a whole "Download All"
    batch shares one timestamp, since it was one click) and `<name>` is built
@@ -227,14 +247,34 @@ quarantines it), delete `electron/node_modules/electron` and re-run
    `<name>.meta.json` sidecar is saved alongside the video too — select it
    together with the video in the Film Room player to see it as a **Play
    Info** panel.
-5. Run the remux script on that folder:
+6. Run the remux script on that folder:
 
 ```bash
-node downloader/remux.js "~/Downloads/FilmRoomDownloads/<mm-dd-yyyy_HH:mm>/<title>"
+node downloader/remux.js "~/Downloads/FilmRoomDownloads/<mm-dd-yyyy_HH-mm>/<title>"
 ```
 
 This produces `output.mp4` in that same folder — open it in the Film Room
 player.
+
+### Downloader → Film Room, in one click
+
+Click **Open Film Room Review…** at the top of the extension popup — it opens
+the Film Room web app in a new tab (works even before any streams are
+detected on the current page). From there:
+
+- **Download All** saves the whole batch into one shared folder:
+  `Downloads/FilmRoomDownloads/<mm-dd-yyyy_HH-mm>/<name>/`.
+- In Film Room, click **Open Folder…** and pick that `<name>` folder — every
+  clip and its `.meta.json` sidecar load together in one pick, no need to
+  select files individually.
+
+If `extension/web` or `extension/shared` ever come through missing or empty
+(e.g. after a zip download that doesn't preserve symlinks, rather than a git
+clone), recreate them from the repo root:
+
+```bash
+cd extension && ln -s ../web web && ln -s ../shared shared
+```
 
 ### Clip naming
 
