@@ -18,9 +18,10 @@ store's unzipper sees a complete package.
    developer signup fee).
 2. "Add new item" → upload the zip.
 3. Fill in the listing:
-   - **Privacy policy URL:**
-     `https://mitchelldawkinsjr.github.io/hudl-download/privacy.html`
-     (live once the `deploy-web.yml` workflow has run — see below).
+   - **Privacy policy URL:** `privacy.html` (this repo's root) needs to be
+     hosted somewhere publicly reachable before submitting -- not GitHub
+     Pages (not in use for this repo). Host it on your own domain/VPS, or
+     wherever else is convenient, and use that URL here.
    - **Single purpose:** "Detect and download video streams from the
      user's own logged-in Hudl session for offline film review."
    - **Permission justification** — explain each permission:
@@ -29,16 +30,6 @@ store's unzipper sees a complete package.
      - `scripting`: read Hudl's per-clip metadata for filenames/sidecars.
      - `storage`: in-extension UI state.
      - `activeTab`: access the active tab when the user clicks the action.
-
-## One-time repo setup for the privacy policy URL
-
-The privacy policy URL above is served by GitHub Pages via
-`.github/workflows/deploy-web.yml`. To enable it:
-
-1. Push `main` (the workflow runs on push).
-2. Repo **Settings → Pages → Source: "GitHub Actions"** (not "Deploy from a
-   branch"). The workflow handles the rest. The policy will be live at the
-   URL above within a minute or two.
 
 ## The one tradeoff to know about: host_permissions scoping
 
