@@ -33,6 +33,7 @@
       <button class="btn small" data-tool="arrow" title="Arrow">➜ Arrow</button>
       <button class="btn small" data-tool="rect" title="Rectangle">▭ Rect</button>
       <button class="btn small" data-tool="ellipse" title="Ellipse">◯ Ellipse</button>
+      <button class="btn small" data-tool="text" title="Text">Aa Text</button>
       <div class="sep"></div>
       <button class="color-swatch active" style="background:#ff3b30" data-color="#ff3b30"></button>
       <button class="color-swatch" style="background:#ffcc00" data-color="#ffcc00"></button>
@@ -112,7 +113,11 @@
   async function loadPlayInfoForActiveClip() {
     const clip = clips[activeIndex];
     if (!clip) {
-      PlayInfo.renderPlayInfo(playInfoEl, null);
+      // Nothing selected yet -- unlike a selected clip with no sidecar,
+      // there's no "play" to show info for at all, so the panel itself
+      // stays hidden rather than showing a "no play info" placeholder.
+      playInfoEl.innerHTML = '';
+      playInfoEl.hidden = true;
       return;
     }
     try {
@@ -301,8 +306,17 @@
   renderNoteChips();
 
   window.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
-    if (e.code === 'Space') { e.preventDefault(); player.togglePlay(); }
+    if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.code === 'Space') {
+      e.preventDefault();
+      // If a button (e.g. the Play button just clicked) has focus, Space
+      // would also fire that button's own click -> a double toggle that
+      // cancels itself out and looks like the spacebar does nothing.
+      // Blur it so only this handler runs.
+      const ae = document.activeElement;
+      if (ae && ae.tagName === 'BUTTON') ae.blur();
+      player.togglePlay();
+    }
     if (e.code === 'ArrowLeft') player.stepFrame(-1);
     if (e.code === 'ArrowRight') player.stepFrame(1);
   });

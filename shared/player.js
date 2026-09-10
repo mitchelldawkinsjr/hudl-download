@@ -24,9 +24,30 @@
       this.drawing = false;
       this.onNotesChanged = null; // optional host callback: (notes) => void
 
+      // Inline <input> shown over the canvas while placing a text
+      // annotation -- { input, point } (point is the normalized placement
+      // point), or null when no text box is currently being edited.
+      this._textEditor = null;
+
+      // Last playback position (ms) we measured, used by _checkNoteStop to
+      // detect a note timestamp being crossed *between* two timeupdate
+      // firings -- timeupdate only fires ~4x/sec, so without comparing the
+      // previous position to the current one a note could be skipped over
+      // entirely during forward playback.
+      this._lastTimeMs = 0;
+
       this.video.addEventListener('loadedmetadata', () => this._resizeCanvas());
-      this.video.addEventListener('timeupdate', () => this._redraw());
+      this.video.addEventListener('timeupdate', () => {
+        this._checkNoteStop();
+        this._redraw();
+      });
       this.video.addEventListener('seeked', () => this._redraw());
+      // Any seek (programmatic or user scrub) resets the crossing baseline
+      // to the new position, so notes the seek jumped *past* don't trigger
+      // a spurious auto-pause on the next timeupdate.
+      this.video.addEventListener('seeking', () => {
+        this._lastTimeMs = this._currentTimeMs();
+      });
       window.addEventListener('resize', () => this._resizeCanvas());
       this._bindCanvasEvents();
       this._resizeCanvas();
@@ -45,6 +66,7 @@
       // they've had a chance to be read back in.
       this.notes = [];
       this.activeNote = null;
+      this._lastTimeMs = 0;
       // Container size is known immediately from layout; don't wait on
       // metadata (which may be slow/never arrive) to size the canvas.
       requestAnimationFrame(() => this._resizeCanvas());
@@ -92,6 +114,37 @@
       this.video.pause();
       this.video.currentTime = ms / 1000;
       this._redraw();
+    }
+
+    // Auto-pause at note timestamps during forward playback: when playback
+    // crosses a note's timestamp, stop exactly on it and stay paused until
+    // the user presses play. Only forward playback triggers it -- seeking
+    // backward (or seeking past a note while paused) is handled by the
+    // `seeking` listener resetting _lastTimeMs, so it never looks like a
+    // forward crossing. After pausing on a note, currentTime is snapped to
+    // that note's exact time, so resuming won't immediately re-trigger the
+    // same note (the next check sees prev == noteTime, and the crossing
+    // test is strictly greater-than on the lower bound).
+    _checkNoteStop() {
+      const cur = this._currentTimeMs();
+      const last = this._lastTimeMs;
+      if (!this.video.paused && this.notes.length && cur > last) {
+        // Earliest note strictly after `last` and at or before `cur`: the
+        // first one playback reached since the last check.
+        let stopAt = -1;
+        for (const note of this.notes) {
+          if (note.timeMs > last && note.timeMs <= cur) {
+            if (stopAt < 0 || note.timeMs < stopAt) stopAt = note.timeMs;
+          }
+        }
+        if (stopAt >= 0) {
+          this.video.pause();
+          this.video.currentTime = stopAt / 1000;
+          this._lastTimeMs = stopAt;
+          return;
+        }
+      }
+      this._lastTimeMs = cur;
     }
 
     // ---------------- telestration ----------------
@@ -230,13 +283,30 @@
     _bindCanvasEvents() {
       const c = this.canvas;
       c.addEventListener('pointerdown', (e) => {
-        c.setPointerCapture(e.pointerId);
         // Freeze playback at the instant drawing starts. Without this, a
         // stroke drawn while the video keeps playing gets stamped with its
         // start timestamp but finishes (and is redrawn) once currentTime
         // has already moved past the visibility tolerance -- so it vanishes
         // the moment you lift the pen, which is the "doesn't show" bug.
         this.video.pause();
+
+        // Text is a click-to-place inline text box, not a drag gesture --
+        // handled entirely separately from the pointermove/pointerup drag
+        // lifecycle below.
+        if (this.tool === 'text') {
+          // A real (trusted) mousedown's default action moves focus to the
+          // nearest focusable ancestor of its target -- canvas isn't
+          // focusable, so that default steals focus right back (to <body>)
+          // immediately after _startTextInput below focuses the new input,
+          // which fires the input's blur handler and commits it empty
+          // before a single character can be typed. preventDefault() here
+          // suppresses that default focus change so our own focus() sticks.
+          e.preventDefault();
+          this._startTextInput(e, this._point(e));
+          return;
+        }
+
+        c.setPointerCapture(e.pointerId);
         this.drawing = true;
         this.activeNote = this._noteForDrawing();
         const p = this._point(e);
@@ -267,6 +337,68 @@
       };
       c.addEventListener('pointerup', end);
       c.addEventListener('pointercancel', end);
+    }
+
+    // Places an inline <input> over the canvas at the clicked position, so
+    // the user can type a text annotation in place rather than through a
+    // blocking prompt() dialog. Committed (turned into a real "text" stroke
+    // on the visible note) on Enter or on blur -- so simply clicking away
+    // (a toolbar button, another point on the canvas) commits whatever was
+    // typed, same as any other inline-edit UI.
+    _startTextInput(e, point) {
+      if (this._textEditor) this._commitTextEditor();
+
+      const wrap = this.canvas.parentElement;
+      const rect = this.canvas.getBoundingClientRect();
+      const wrapRect = wrap.getBoundingClientRect();
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'telestration-text-input';
+      input.style.left = (rect.left - wrapRect.left + point.x * rect.width) + 'px';
+      input.style.top = (rect.top - wrapRect.top + point.y * rect.height) + 'px';
+      input.style.color = this.color;
+      input.style.fontSize = Math.max(12, this.lineWidth * 4) + 'px';
+
+      const commit = () => this._commitTextEditor();
+      input.addEventListener('keydown', (ev) => {
+        // Stop the page-level spacebar/arrow-key shortcuts (play/pause,
+        // frame step) from firing while the user is typing into the box.
+        ev.stopPropagation();
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          commit();
+        } else if (ev.key === 'Escape') {
+          ev.preventDefault();
+          this._cancelTextEditor();
+        }
+      });
+      input.addEventListener('blur', commit);
+
+      wrap.appendChild(input);
+      input.focus();
+      this._textEditor = { input, point };
+    }
+
+    _commitTextEditor() {
+      const editor = this._textEditor;
+      if (!editor) return;
+      this._textEditor = null;
+      const text = editor.input.value.trim();
+      editor.input.remove();
+      if (!text) return;
+
+      const note = this._noteForDrawing();
+      note.strokes.push({ tool: 'text', color: this.color, width: this.lineWidth, points: [editor.point], text });
+      this._notifyNotesChanged();
+      this._redraw();
+    }
+
+    _cancelTextEditor() {
+      const editor = this._textEditor;
+      if (!editor) return;
+      this._textEditor = null;
+      editor.input.remove();
     }
 
     // Points are normalized to the canvas's own size (0..1) so saved notes
@@ -339,6 +471,21 @@
         ctx.beginPath();
         ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
         ctx.stroke();
+      } else if (s.tool === 'text') {
+        if (!s.text) return;
+        const p0 = px(pts[0]);
+        const dpr = window.devicePixelRatio || 1;
+        const fontSize = Math.max(12, s.width * 4) * dpr;
+        ctx.font = `600 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+        ctx.textBaseline = 'top';
+        // A dark outline keeps the text legible over any video background,
+        // the same way broadcast telestration text usually is.
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = Math.max(2, fontSize / 8);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.strokeText(s.text, p0.x, p0.y);
+        ctx.fillStyle = s.color;
+        ctx.fillText(s.text, p0.x, p0.y);
       }
     }
 

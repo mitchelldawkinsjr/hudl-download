@@ -13,17 +13,26 @@
     return !data.playLabel && !hasFields && !hasTables;
   }
 
+  // Always shows the panel once a clip is active -- even with no sidecar
+  // data, a "no play info" message is more useful than the panel silently
+  // vanishing (which reads as "did my click even register?"). It's up to
+  // the caller not to call this at all when there's no active clip (see
+  // web/index.html and electron/index.html's `if (!clip)` branches), so
+  // that "nothing selected yet" still hides the panel entirely.
   function renderPlayInfo(container, data) {
+    container.hidden = false;
+
     if (isEmpty(data)) {
-      container.innerHTML = '';
-      container.hidden = true;
+      container.innerHTML = '<h2>Play Info</h2><div class="play-info-empty">No play info captured for this clip.</div>';
       return;
     }
-    container.hidden = false;
 
     let html = '<h2>Play Info</h2>';
     if (data.playLabel) {
       html += `<div class="field-row"><span class="k">Play</span><span class="v">${escapeHtml(data.playLabel.replace(/^Play-/, ''))}</span></div>`;
+    }
+    if (data.videoId) {
+      html += `<div class="field-row"><span class="k">Video ID</span><span class="v">${escapeHtml(data.videoId)}</span></div>`;
     }
     if (data.fields) {
       for (const [k, v] of Object.entries(data.fields)) {

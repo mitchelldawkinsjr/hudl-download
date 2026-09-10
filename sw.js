@@ -2,15 +2,18 @@
 // under web/) so its scope can cover both web/ and the shared/ engine it
 // depends on -- a service worker can never claim a scope broader than its
 // own location, and web/sw.js would've been stuck unable to see shared/.
-const CACHE_NAME = 'film-room-shell-v2';
+const CACHE_NAME = 'film-room-shell-v6';
 
 const SHELL_URLS = [
   './web/index.html',
   './web/manifest.webmanifest',
   './web/icons/icon-192.png',
   './web/icons/icon-512.png',
+  './web/app.js',
+  './web/sw-register.js',
   './shared/player.css',
   './shared/player.js',
+  './shared/play-info.js',
   './shared/hudl-import.js',
 ];
 
