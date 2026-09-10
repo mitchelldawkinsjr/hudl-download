@@ -276,6 +276,28 @@ clone), recreate them from the repo root:
 cd extension && ln -s ../web web && ln -s ../shared shared
 ```
 
+**On Windows**, this is the normal case, not the exception: Git for Windows
+can't create real symlinks by default (it needs Developer Mode plus a config
+change), so a plain `git clone`/`git pull` checks these two paths out as tiny
+placeholder text files instead of folders -- Chrome's "Load unpacked" then
+reports the whole `extension/` folder as empty, since it can't resolve them.
+
+- **Fastest fix, no setup:** run `./extension/package.sh` (Git Bash/WSL) to
+  build `dist/film-room-downloader-v<version>.zip`, unzip it, and "Load
+  unpacked" that *unzipped* folder instead of `extension/` directly --
+  packaging dereferences the symlinks into real files, so there's nothing
+  for Windows to choke on.
+- **To make `extension/` itself work** (so you don't need to re-unzip after
+  every change): enable **Settings → Privacy & security → For developers →
+  Developer Mode**, then from the repo, in Git Bash or PowerShell:
+  ```
+  git config core.symlinks true
+  git rm -r --cached extension/shared extension/web
+  git checkout -- extension/shared extension/web
+  ```
+  That redoes those two checkouts as real symlinks now that Git is allowed to
+  create them, and `extension/` loads unpacked the same way it does on macOS.
+
 ### Clip naming
 
 The extension runs a small script in the page itself (via
