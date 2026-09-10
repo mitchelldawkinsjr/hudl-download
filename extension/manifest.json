@@ -2,21 +2,33 @@
   "manifest_version": 3,
   "name": "Film Room Downloader",
   "version": "0.1.0",
-  "description": "Detects the HLS/DASH video stream on the current tab and saves its segments locally so the companion remux script can build an MP4. Uses your existing logged-in session — no credentials handled by the extension.",
+  "description": "Detects the HLS/DASH video stream on the current Hudl tab and saves its segments locally so the companion remux script can build an MP4. Uses your existing logged-in Hudl session — no credentials handled by the extension.",
+  "author": "Mitchell Dawkins",
+  "homepage_url": "https://github.com/mitchelldawkinsjr/hudl-download",
   "permissions": ["webRequest", "downloads", "storage", "activeTab", "scripting"],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": [
+    "*://*.hudl.com/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["*://*.hudl.com/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
   ],
+  "icons": {
+    "192": "web/icons/icon-192.png",
+    "512": "web/icons/icon-512.png"
+  },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Film Room Downloader"
+    "default_title": "Film Room Downloader",
+    "default_icon": {
+      "192": "web/icons/icon-192.png",
+      "512": "web/icons/icon-512.png"
+    }
   }
 }

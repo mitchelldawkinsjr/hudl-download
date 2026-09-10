@@ -38,6 +38,14 @@
     font-size: 12px;
   }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-secondary {
+    background: #262a33;
+    color: #e8eaed;
+    border: 1px solid #333844;
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  .btn-secondary:hover { background: #303542; }
   #downloadAll { width: 100%; margin-bottom: 10px; display: none; }
   #progress { margin-top: 10px; font-size: 12px; }
   .job-block { margin-bottom: 8px; }
@@ -50,17 +58,33 @@
   }
   .bar-fill { height: 100%; background: #ff6a1a; width: 0%; }
   .error { color: #ff6a6a; }
+  #overallProgress {
+    display: none;
+    background: #1c1f26;
+    border: 1px solid #333844;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+  }
+  #overallStatus { font-size: 12px; margin-bottom: 6px; }
+  #overallProgress .bar { height: 8px; margin-top: 0; }
 </style>
 </head>
 <body>
   <h1>Film Room Downloader</h1>
+  <button id="openFilmRoom" class="btn-secondary">Open Film Room Review…</button>
   <div class="hint">
     Detected video streams on this tab. Runs inside your existing logged-in
     session — nothing is scraped without you clicking Download.
   </div>
   <button id="downloadAll"></button>
+  <div id="overallProgress">
+    <div id="overallStatus"></div>
+    <div class="bar"><div class="bar-fill" id="overallBarFill"></div></div>
+  </div>
   <div id="list"></div>
   <div id="progress"></div>
+  <script src="download-all.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
