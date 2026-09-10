@@ -159,6 +159,11 @@ html, body {
   min-width: 0;
 }
 
+.main:fullscreen,
+.main:-webkit-full-screen {
+  background: var(--bg);
+}
+
 .telestration-bar {
   display: flex;
   align-items: center;

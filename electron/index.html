@@ -26,7 +26,7 @@
     <div class="play-info" id="playInfo" hidden></div>
   </div>
 
-  <div class="main">
+  <div class="main" id="main">
     <div class="telestration-bar">
       <button class="btn small" data-tool="pen" title="Pen">✏️ Pen</button>
       <button class="btn small" data-tool="line" title="Line">／ Line</button>
@@ -85,6 +85,7 @@
             <option value="2">2x</option>
           </select>
         </label>
+        <button class="btn" id="fullscreenBtn" title="Fullscreen">⛶ Fullscreen</button>
       </div>
     </div>
   </div>
@@ -208,6 +209,36 @@
   document.getElementById('fpsSelect').addEventListener('change', (e) => {
     player.setFps(parseInt(e.target.value, 10));
   });
+
+  // ---- fullscreen ----
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const fullscreenTarget = document.getElementById('main');
+
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  function updateFullscreenBtn() {
+    fullscreenBtn.textContent = isFullscreen() ? '⛶ Exit Fullscreen' : '⛶ Fullscreen';
+  }
+
+  if (fullscreenTarget.requestFullscreen || fullscreenTarget.webkitRequestFullscreen) {
+    fullscreenBtn.addEventListener('click', () => {
+      if (isFullscreen()) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      } else {
+        (fullscreenTarget.requestFullscreen || fullscreenTarget.webkitRequestFullscreen).call(fullscreenTarget);
+      }
+    });
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach((evt) => {
+      document.addEventListener(evt, () => {
+        updateFullscreenBtn();
+        window.dispatchEvent(new Event('resize'));
+      });
+    });
+  } else {
+    fullscreenBtn.hidden = true;
+  }
 
   function fmt(t) {
     if (!isFinite(t)) return '00:00';

@@ -223,6 +223,47 @@
     player.setFps(parseInt(e.target.value, 10));
   });
 
+  // ---- fullscreen ----
+  // Fullscreens the whole main pane (telestration bar, video + overlay,
+  // notes, transport controls) rather than just the <video> -- so drawing
+  // tools and playback controls stay usable while fullscreen, not just raw
+  // video playback.
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const fullscreenTarget = document.getElementById('main');
+
+  function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  function updateFullscreenBtn() {
+    fullscreenBtn.textContent = isFullscreen() ? '⛶ Exit Fullscreen' : '⛶ Fullscreen';
+  }
+
+  if (fullscreenTarget.requestFullscreen || fullscreenTarget.webkitRequestFullscreen) {
+    fullscreenBtn.addEventListener('click', () => {
+      if (isFullscreen()) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      } else {
+        (fullscreenTarget.requestFullscreen || fullscreenTarget.webkitRequestFullscreen).call(fullscreenTarget);
+      }
+    });
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach((evt) => {
+      document.addEventListener(evt, () => {
+        updateFullscreenBtn();
+        // Fullscreen transitions don't reliably fire a window 'resize'
+        // event in every browser (Safari especially), but the canvas
+        // overlay needs to rescale to the new element size -- player.js
+        // already resizes on 'resize', so just piggy-back on that instead
+        // of reaching into its private canvas-sizing method directly.
+        window.dispatchEvent(new Event('resize'));
+      });
+    });
+  } else {
+    // Fullscreen API unavailable (older Safari/iOS) -- hide rather than
+    // leave a dead button.
+    fullscreenBtn.hidden = true;
+  }
+
   function fmt(t) {
     if (!isFinite(t)) return '00:00';
     const m = Math.floor(t / 60).toString().padStart(2, '0');
