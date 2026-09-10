@@ -1,0 +1,69 @@
+name: Deploy Film Room web app to GitHub Pages
+
+# Builds a static site containing the PWA shell (web/, shared/, sw.js, and
+# the public privacy policy) and deploys it to GitHub Pages so the viewer
+# is reachable over HTTPS -- a service worker (and therefore PWA install
+# + offline support) refuses to register over file:// or plain http://,
+# which is the whole reason this workflow exists.
+#
+# Resulting URL: https://<user>.github.io/<repo>/web/index.html
+#
+# One-time setup in the repo's Settings → Pages:
+#   Source: "GitHub Actions"  (not "Deploy from a branch")
+# No other configuration is needed.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'shared/**'
+      - 'sw.js'
+      - 'privacy.html'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deployment should run at a time per branch.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble site
+        run: |
+          mkdir -p site
+          cp -r web site/web
+          cp -r shared site/shared
+          cp sw.js site/sw.js
+          # privacy.html is optional -- deploy it if it exists.
+          [ -f privacy.html ] && cp privacy.html site/privacy.html || true
+          # .nojekyll tells GitHub Pages not to run Jekyll, so files/paths
+          # Jekyll would otherwise drop (none here today, but it's the safe
+          # default for a static SPA deploy).
+          touch site/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

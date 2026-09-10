@@ -13,3 +13,7 @@ test-assets/
 Start_WR*/
 *.telestration.json
 *.meta.json
+
+# personal VPS/deployment tooling (IPs, email, internal hostnames) --
+# not relevant to other users of this repo, never commit
+scripts/

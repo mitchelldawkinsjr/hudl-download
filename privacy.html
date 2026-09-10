@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Film Room Downloader — Privacy Policy</title>
+<style>
+  body {
+    max-width: 720px;
+    margin: 40px auto;
+    padding: 0 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.6;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 1.6em; }
+  .updated { color: #666; font-size: 0.9em; }
+  code { background: #f3f3f3; padding: 1px 4px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>Film Room Downloader — Privacy Policy</h1>
+<p class="updated">Last updated: September 9, 2026</p>
+
+<p>
+  Film Room Downloader is a browser extension that helps coaches save video
+  from their own logged-in Hudl session for offline review. This policy
+  describes what the extension does and does not do with your data.
+</p>
+
+<h2>Data we collect</h2>
+<p>
+  None. The extension does not collect, transmit, sell, or share any personal
+  data or usage data with the developer or any third party. There is no
+  analytics, no telemetry, and no remote logging.
+</p>
+
+<h2>What the extension accesses and why</h2>
+<ul>
+  <li>
+    <strong>Network requests on Hudl tabs (<code>webRequest</code>).</strong>
+    The extension observes outgoing network requests only on
+    <code>*.hudl.com</code> to detect when the page loads a video stream
+    (an HLS/DASH manifest or a progressive video file). Only the request URL
+    is read, and only to classify it as video. Request contents, response
+    bodies, and any non-video requests are not inspected or stored.
+  </li>
+  <li>
+    <strong>Page content on Hudl (<code>scripting</code> / content script).</strong>
+    A script reads Hudl's own per-clip data fields (play number, down,
+    distance, formation, result, quarter, etc.) from the page you are
+    already viewing, solely to name the downloaded file and write a
+    <code>.meta.json</code> sidecar next to it. This data stays on your
+    device as part of the download.
+  </li>
+  <li>
+    <strong>Downloads (<code>downloads</code>).</strong>
+    Video files and their sidecars are saved through Chrome's own download
+    manager to your Downloads folder. The extension never uploads them
+    anywhere.
+  </li>
+  <li>
+    <strong>Storage (<code>storage</code>).</strong>
+    Used only for in-extension UI state. No personal data is stored
+    remotely.
+  </li>
+</ul>
+
+<h2>Your account and credentials</h2>
+<p>
+  The extension never sees, handles, or stores your Hudl password or any
+  login credentials. Downloads use your existing browser session
+  (cookies) automatically, exactly as if you had downloaded the file
+  yourself from the page.
+  </p>
+
+<h2>Where data lives</h2>
+<p>
+  Everything the extension reads or saves stays on your local device. Video
+  files, <code>.meta.json</code> sidecars, and any telestration notes you
+  create in the Film Room viewer are all local files. Nothing is sent to a
+  server operated by the developer.
+</p>
+
+<h2>Third parties</h2>
+<p>
+  The extension interacts only with Hudl (the site you are already logged
+  into) and Chrome's own download manager. It does not integrate with any
+  other third-party service.
+</p>
+
+<h2>Children's privacy</h2>
+<p>
+  The extension is intended for coaches and team staff managing their own
+  film. It does not knowingly collect any data from anyone, including
+  children.
+</p>
+
+<h2>Changes to this policy</h2>
+<p>
+  If the extension's data practices change, this page will be updated and
+  the "Last updated" date above will reflect the change.
+</p>
+
+<h2>Contact</h2>
+<p>
+  Questions about this policy can be filed as an issue at
+  <a href="https://github.com/mitchelldawkinsjr/hudl-download/issues">github.com/mitchelldawkinsjr/hudl-download/issues</a>.
+</p>
+</body>
+</html>
