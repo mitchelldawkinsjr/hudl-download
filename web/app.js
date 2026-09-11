@@ -240,11 +240,48 @@
 
   document.getElementById('skipBack').addEventListener('click', () => player.seekBy(-5));
   document.getElementById('skipFwd').addEventListener('click', () => player.seekBy(5));
-  document.getElementById('frameBack').addEventListener('click', () => player.stepFrame(-1));
-  document.getElementById('frameFwd').addEventListener('click', () => player.stepFrame(1));
 
-  document.getElementById('speedSelect').addEventListener('change', (e) => {
-    player.setSpeed(parseFloat(e.target.value));
+  // Press-and-hold repeats stepFrame at a fixed real-time interval instead
+  // of one step per click -- since each step only advances 1/fps of video
+  // time, repeating it steadily plays the video back frame-by-frame at a
+  // fraction of real speed, i.e. a manual slow-motion scrub in whichever
+  // direction is held. A plain tap still steps exactly one frame (the
+  // immediate step on pointerdown, below), same as before.
+  function bindHoldToStep(btn, dir) {
+    const STEP_INTERVAL_MS = 90;
+    const HOLD_DELAY_MS = 350;
+    let startTimer = null;
+    let repeatTimer = null;
+    const step = () => player.stepFrame(dir);
+    const stop = () => {
+      clearTimeout(startTimer);
+      clearInterval(repeatTimer);
+      startTimer = null;
+      repeatTimer = null;
+    };
+    btn.addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      step();
+      startTimer = setTimeout(() => {
+        repeatTimer = setInterval(step, STEP_INTERVAL_MS);
+      }, HOLD_DELAY_MS);
+    });
+    btn.addEventListener('pointerup', stop);
+    btn.addEventListener('pointerleave', stop);
+    btn.addEventListener('pointercancel', stop);
+  }
+  bindHoldToStep(document.getElementById('frameBack'), -1);
+  bindHoldToStep(document.getElementById('frameFwd'), 1);
+
+  // Quick-click speed buttons (replacing a <select>) -- the same
+  // press-once, highlight-the-active-one pattern already used for the
+  // telestration tool buttons and color swatches.
+  document.querySelectorAll('.speed-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.speed-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      player.setSpeed(parseFloat(btn.dataset.speed));
+    });
   });
   document.getElementById('fpsSelect').addEventListener('change', (e) => {
     player.setFps(parseInt(e.target.value, 10));
@@ -304,6 +341,147 @@
     // leave a dead button.
     fullscreenBtn.hidden = true;
   }
+
+  // ---- fly-out (docked/floating) controls ----
+  const controlsEl = document.getElementById('controls');
+  const dockToggleBtn = document.getElementById('dockToggleBtn');
+  const controlsDragHandle = document.getElementById('controlsDragHandle');
+  const controlsOpacitySlider = document.getElementById('controlsOpacity');
+  const mainEl = document.getElementById('main');
+  const CONTROLS_FLOATING_KEY = 'filmroom.controlsFloating';
+  const CONTROLS_POS_KEY = 'filmroom.controlsPos';
+  const CONTROLS_OPACITY_KEY = 'filmroom.controlsOpacity';
+
+  // position:fixed measures left/top/width against the viewport, not
+  // .main -- so without this, the panel's default CSS width (a % of the
+  // viewport) can render wider than the pane it's meant to float over
+  // (especially with the sidebar open, which eats into .main's actual
+  // width), and a dragged position can end up outside it entirely. Called
+  // on float-on, after every drag, and on resize, so the panel can never
+  // end up wider than or outside of .main's own bounds.
+  function clampControlsWidth() {
+    const bounds = mainEl.getBoundingClientRect();
+    controlsEl.style.width = '';
+    const naturalWidth = controlsEl.offsetWidth;
+    controlsEl.style.width = Math.min(naturalWidth, Math.max(200, bounds.width - 24)) + 'px';
+  }
+
+  function clampControlsPosition(desiredLeft, desiredTop) {
+    const bounds = mainEl.getBoundingClientRect();
+    const width = controlsEl.offsetWidth;
+    const height = controlsEl.offsetHeight;
+    const maxLeft = Math.max(bounds.left, bounds.left + bounds.width - width);
+    const maxTop = Math.max(bounds.top, bounds.top + bounds.height - height);
+    controlsEl.style.left = Math.min(Math.max(desiredLeft, bounds.left), maxLeft) + 'px';
+    controlsEl.style.top = Math.min(Math.max(desiredTop, bounds.top), maxTop) + 'px';
+    controlsEl.style.right = 'auto';
+    controlsEl.style.bottom = 'auto';
+    controlsEl.style.transform = 'none';
+  }
+
+  function defaultControlsSpot() {
+    const bounds = mainEl.getBoundingClientRect();
+    return {
+      left: bounds.left + bounds.width / 2 - controlsEl.offsetWidth / 2,
+      top: bounds.top + bounds.height - controlsEl.offsetHeight - 20,
+    };
+  }
+
+  function loadSavedControlsPos() {
+    try {
+      const raw = localStorage.getItem(CONTROLS_POS_KEY);
+      if (!raw) return null;
+      const pos = JSON.parse(raw);
+      if (typeof pos.left === 'number' && typeof pos.top === 'number') return pos;
+    } catch (e) {}
+    return null;
+  }
+
+  function setControlsFloating(floating) {
+    controlsEl.classList.toggle('floating', floating);
+    dockToggleBtn.textContent = floating ? '⤓ Dock' : '⤢ Fly Out';
+    dockToggleBtn.title = floating ? 'Dock controls back into place' : 'Fly out larger, touch-friendly controls';
+    try {
+      localStorage.setItem(CONTROLS_FLOATING_KEY, floating ? '1' : '0');
+    } catch (e) {}
+    if (floating) {
+      clampControlsWidth();
+      const spot = loadSavedControlsPos() || defaultControlsSpot();
+      clampControlsPosition(spot.left, spot.top);
+    } else {
+      controlsEl.style.width = '';
+      controlsEl.style.left = '';
+      controlsEl.style.top = '';
+      controlsEl.style.right = '';
+      controlsEl.style.bottom = '';
+      controlsEl.style.transform = '';
+    }
+    // Taking .controls out of flow changes how much height .video-stage
+    // gets, same reasoning as the sidebar toggle above -- nudge the canvas
+    // to rescale once the layout has settled.
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 60);
+  }
+
+  dockToggleBtn.addEventListener('click', () => {
+    setControlsFloating(!controlsEl.classList.contains('floating'));
+  });
+
+  // Re-clamp on every resize (including the synthetic ones the sidebar/
+  // fullscreen toggles dispatch above) so a saved position from a wider
+  // .main -- or the sidebar opening and eating into it -- can't leave the
+  // panel hanging outside its bounds.
+  window.addEventListener('resize', () => {
+    if (!controlsEl.classList.contains('floating')) return;
+    const rect = controlsEl.getBoundingClientRect();
+    clampControlsWidth();
+    clampControlsPosition(rect.left, rect.top);
+  });
+
+  // Dragging is scoped to the handle (not the whole panel) so it doesn't
+  // fight with clicking the buttons/seek bar/opacity slider inside it.
+  let controlsDragState = null;
+  controlsDragHandle.addEventListener('pointerdown', (e) => {
+    const rect = controlsEl.getBoundingClientRect();
+    controlsDragState = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, startLeft: rect.left, startTop: rect.top };
+    controlsDragHandle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  controlsDragHandle.addEventListener('pointermove', (e) => {
+    if (!controlsDragState || e.pointerId !== controlsDragState.pointerId) return;
+    clampControlsPosition(
+      controlsDragState.startLeft + (e.clientX - controlsDragState.startX),
+      controlsDragState.startTop + (e.clientY - controlsDragState.startY)
+    );
+  });
+  function endControlsDrag(e) {
+    if (!controlsDragState || (e.pointerId != null && e.pointerId !== controlsDragState.pointerId)) return;
+    controlsDragState = null;
+    try {
+      const rect = controlsEl.getBoundingClientRect();
+      localStorage.setItem(CONTROLS_POS_KEY, JSON.stringify({ left: rect.left, top: rect.top }));
+    } catch (err) {}
+  }
+  controlsDragHandle.addEventListener('pointerup', endControlsDrag);
+  controlsDragHandle.addEventListener('pointercancel', endControlsDrag);
+
+  controlsOpacitySlider.addEventListener('input', () => {
+    const val = controlsOpacitySlider.value / 100;
+    controlsEl.style.setProperty('--controls-opacity', String(val));
+    try {
+      localStorage.setItem(CONTROLS_OPACITY_KEY, String(val));
+    } catch (e) {}
+  });
+  try {
+    const savedOpacity = localStorage.getItem(CONTROLS_OPACITY_KEY);
+    if (savedOpacity != null) {
+      controlsEl.style.setProperty('--controls-opacity', savedOpacity);
+      controlsOpacitySlider.value = String(Math.round(parseFloat(savedOpacity) * 100));
+    }
+  } catch (e) {}
+
+  try {
+    if (localStorage.getItem(CONTROLS_FLOATING_KEY) === '1') setControlsFloating(true);
+  } catch (e) {}
 
   function fmt(t) {
     if (!isFinite(t)) return '00:00';

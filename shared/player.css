@@ -339,6 +339,137 @@ html, body {
   border-top: 1px solid var(--border);
 }
 
+/* "Flown out": detached from the layout flow into a floating, draggable
+   panel with larger touch targets -- for using the transport controls on a
+   touchscreen (iPad, etc.) without hunting for small buttons. Taking it out
+   of flow also lets .video-stage above reclaim that row's height.
+
+   left/top/bottom/transform here are just the pre-JS default (avoids a
+   flash at 0,0 before script runs) -- app.js immediately repositions and
+   bounds the panel against .main's actual rect, not raw viewport units,
+   since this is position:fixed and vw/% width would otherwise be
+   measured against the whole window (including the sidebar's width),
+   letting the panel render wider than -- and spill outside of -- the
+   pane it's supposed to float over. Every reposition (initial, dragged,
+   or on resize) is clamped the same way, so it can never end up outside
+   .main's bounds. */
+.controls.floating {
+  position: fixed;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(92%, 760px);
+  max-width: calc(100% - 24px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  z-index: 30;
+  padding: 10px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+  /* Set via the opacity slider (see app.js) as a custom property, not
+     directly as `opacity`, so it only ever affects the floating panel --
+     the property has no effect on the docked .controls (no selector
+     there references it), so opacity doesn't bleed into the normal
+     toolbar once you dock back. */
+  opacity: var(--controls-opacity, 1);
+}
+
+.controls-float-bar {
+  display: none;
+}
+
+.controls.floating .controls-float-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -2px -8px 10px;
+  padding: 6px 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.drag-handle {
+  cursor: grab;
+  color: var(--text-dim);
+  letter-spacing: 3px;
+  font-size: 13px;
+  padding: 6px 12px;
+  user-select: none;
+  touch-action: none;
+  border-radius: 6px;
+}
+
+.drag-handle:hover { background: var(--bg-elevated); }
+.drag-handle:active { cursor: grabbing; }
+
+.opacity-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+  flex: 1;
+  white-space: nowrap;
+}
+
+.opacity-field input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.controls.floating .seek-row {
+  margin-bottom: 14px;
+}
+
+.controls.floating .time-label {
+  font-size: 15px;
+  min-width: 110px;
+}
+
+.controls.floating input[type="range"] {
+  height: 10px;
+}
+
+.controls.floating .transport-row {
+  gap: 12px;
+  row-gap: 10px;
+  /* At floating sizes the full button row (5 transport buttons + Speed +
+     Fullscreen + Dock) doesn't reliably fit in the panel's bounded width
+     (see the comment on .controls.floating above -- it's capped to
+     .main's actual width, which can be narrow, e.g. with the sidebar
+     open). Without wrapping, flex just squeezes the buttons instead of
+     reflowing them, which is what actually overflowed. The spacer
+     (flex-basis:100% below) forces the Speed/Fullscreen/Dock group onto
+     its own second row rather than letting an arbitrary button wrap
+     mid-row. */
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.controls.floating .transport-row .spacer {
+  flex: 0 0 100%;
+  height: 0;
+}
+
+.controls.floating .btn {
+  padding: 16px 20px;
+  font-size: 16px;
+  border-radius: 10px;
+}
+
+.controls.floating .btn.primary {
+  padding: 16px 28px;
+}
+
+.controls.floating select.speed-select {
+  padding: 12px 14px;
+  font-size: 15px;
+  border-radius: 10px;
+}
+
+.controls.floating label.field {
+  font-size: 13px;
+  gap: 10px;
+}
+
 .seek-row {
   display: flex;
   align-items: center;
@@ -363,9 +494,32 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
+  row-gap: 6px;
+  /* Wrap in both docked and floating layouts -- with the speed control
+     now a row of buttons instead of one compact <select>, a narrow
+     window (or the sidebar open, eating into available width) needs
+     this to reflow onto another line instead of overflowing, same
+     reasoning as the floating-specific wrap this generalizes. */
+  flex-wrap: wrap;
 }
 
 .transport-row .spacer { flex: 1; }
+
+.speed-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.speed-group-label {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin-right: 2px;
+}
+
+.controls.floating .speed-group-label {
+  font-size: 13px;
+}
 
 select.speed-select {
   background: var(--bg-elevated);

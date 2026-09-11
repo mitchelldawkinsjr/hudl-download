@@ -67,7 +67,14 @@
       </div>
     </div>
 
-    <div class="controls">
+    <div class="controls" id="controls">
+      <div class="controls-float-bar">
+        <span class="drag-handle" id="controlsDragHandle" title="Drag to move">⠿⠿⠿⠿⠿⠿</span>
+        <label class="opacity-field">
+          <span>Opacity</span>
+          <input type="range" id="controlsOpacity" min="30" max="100" value="100" />
+        </label>
+      </div>
       <div class="seek-row">
         <span class="time-label" id="timeLabel">00:00 / 00:00</span>
         <input type="range" id="seekBar" min="0" max="1000" value="0" />
@@ -79,18 +86,18 @@
         <button class="btn" id="skipFwd" title="Forward 5s">5s »</button>
         <button class="btn" id="frameFwd" title="Next frame">Frame ⏭</button>
         <div class="spacer"></div>
-        <label class="field">Speed
-          <select id="speedSelect" class="speed-select">
-            <option value="0.1">0.1x</option>
-            <option value="0.25">0.25x (slo-mo)</option>
-            <option value="0.5">0.5x</option>
-            <option value="0.75">0.75x</option>
-            <option value="1" selected>1x</option>
-            <option value="1.5">1.5x</option>
-            <option value="2">2x</option>
-          </select>
-        </label>
+        <div class="speed-group" role="group" aria-label="Playback speed">
+          <span class="speed-group-label">Speed</span>
+          <button class="btn small speed-btn" data-speed="0.1">0.1x</button>
+          <button class="btn small speed-btn" data-speed="0.25" title="Slo-mo">0.25x</button>
+          <button class="btn small speed-btn" data-speed="0.5">0.5x</button>
+          <button class="btn small speed-btn" data-speed="0.75">0.75x</button>
+          <button class="btn small speed-btn active" data-speed="1" title="Normal speed">1x</button>
+          <button class="btn small speed-btn" data-speed="1.5">1.5x</button>
+          <button class="btn small speed-btn" data-speed="2">2x</button>
+        </div>
         <button class="btn" id="fullscreenBtn" title="Fullscreen">⛶ Fullscreen</button>
+        <button class="btn" id="dockToggleBtn" title="Fly out larger, touch-friendly controls">⤢ Fly Out</button>
       </div>
     </div>
   </div>
@@ -228,11 +235,39 @@
 
   document.getElementById('skipBack').addEventListener('click', () => player.seekBy(-5));
   document.getElementById('skipFwd').addEventListener('click', () => player.seekBy(5));
-  document.getElementById('frameBack').addEventListener('click', () => player.stepFrame(-1));
-  document.getElementById('frameFwd').addEventListener('click', () => player.stepFrame(1));
 
-  document.getElementById('speedSelect').addEventListener('change', (e) => {
-    player.setSpeed(parseFloat(e.target.value));
+  function bindHoldToStep(btn, dir) {
+    const STEP_INTERVAL_MS = 90;
+    const HOLD_DELAY_MS = 350;
+    let startTimer = null;
+    let repeatTimer = null;
+    const step = () => player.stepFrame(dir);
+    const stop = () => {
+      clearTimeout(startTimer);
+      clearInterval(repeatTimer);
+      startTimer = null;
+      repeatTimer = null;
+    };
+    btn.addEventListener('pointerdown', (e) => {
+      if (e.button != null && e.button !== 0) return;
+      step();
+      startTimer = setTimeout(() => {
+        repeatTimer = setInterval(step, STEP_INTERVAL_MS);
+      }, HOLD_DELAY_MS);
+    });
+    btn.addEventListener('pointerup', stop);
+    btn.addEventListener('pointerleave', stop);
+    btn.addEventListener('pointercancel', stop);
+  }
+  bindHoldToStep(document.getElementById('frameBack'), -1);
+  bindHoldToStep(document.getElementById('frameFwd'), 1);
+
+  document.querySelectorAll('.speed-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.speed-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      player.setSpeed(parseFloat(btn.dataset.speed));
+    });
   });
   document.getElementById('fpsSelect').addEventListener('change', (e) => {
     player.setFps(parseInt(e.target.value, 10));
@@ -267,6 +302,131 @@
   } else {
     fullscreenBtn.hidden = true;
   }
+
+  // ---- fly-out (docked/floating) controls ----
+  const controlsEl = document.getElementById('controls');
+  const dockToggleBtn = document.getElementById('dockToggleBtn');
+  const controlsDragHandle = document.getElementById('controlsDragHandle');
+  const controlsOpacitySlider = document.getElementById('controlsOpacity');
+  const mainEl = document.getElementById('main');
+  const CONTROLS_FLOATING_KEY = 'filmroom.controlsFloating';
+  const CONTROLS_POS_KEY = 'filmroom.controlsPos';
+  const CONTROLS_OPACITY_KEY = 'filmroom.controlsOpacity';
+
+  function clampControlsWidth() {
+    const bounds = mainEl.getBoundingClientRect();
+    controlsEl.style.width = '';
+    const naturalWidth = controlsEl.offsetWidth;
+    controlsEl.style.width = Math.min(naturalWidth, Math.max(200, bounds.width - 24)) + 'px';
+  }
+
+  function clampControlsPosition(desiredLeft, desiredTop) {
+    const bounds = mainEl.getBoundingClientRect();
+    const width = controlsEl.offsetWidth;
+    const height = controlsEl.offsetHeight;
+    const maxLeft = Math.max(bounds.left, bounds.left + bounds.width - width);
+    const maxTop = Math.max(bounds.top, bounds.top + bounds.height - height);
+    controlsEl.style.left = Math.min(Math.max(desiredLeft, bounds.left), maxLeft) + 'px';
+    controlsEl.style.top = Math.min(Math.max(desiredTop, bounds.top), maxTop) + 'px';
+    controlsEl.style.right = 'auto';
+    controlsEl.style.bottom = 'auto';
+    controlsEl.style.transform = 'none';
+  }
+
+  function defaultControlsSpot() {
+    const bounds = mainEl.getBoundingClientRect();
+    return {
+      left: bounds.left + bounds.width / 2 - controlsEl.offsetWidth / 2,
+      top: bounds.top + bounds.height - controlsEl.offsetHeight - 20,
+    };
+  }
+
+  function loadSavedControlsPos() {
+    try {
+      const raw = localStorage.getItem(CONTROLS_POS_KEY);
+      if (!raw) return null;
+      const pos = JSON.parse(raw);
+      if (typeof pos.left === 'number' && typeof pos.top === 'number') return pos;
+    } catch (e) {}
+    return null;
+  }
+
+  function setControlsFloating(floating) {
+    controlsEl.classList.toggle('floating', floating);
+    dockToggleBtn.textContent = floating ? '⤓ Dock' : '⤢ Fly Out';
+    dockToggleBtn.title = floating ? 'Dock controls back into place' : 'Fly out larger, touch-friendly controls';
+    try {
+      localStorage.setItem(CONTROLS_FLOATING_KEY, floating ? '1' : '0');
+    } catch (e) {}
+    if (floating) {
+      clampControlsWidth();
+      const spot = loadSavedControlsPos() || defaultControlsSpot();
+      clampControlsPosition(spot.left, spot.top);
+    } else {
+      controlsEl.style.width = '';
+      controlsEl.style.left = '';
+      controlsEl.style.top = '';
+      controlsEl.style.right = '';
+      controlsEl.style.bottom = '';
+      controlsEl.style.transform = '';
+    }
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 60);
+  }
+
+  dockToggleBtn.addEventListener('click', () => {
+    setControlsFloating(!controlsEl.classList.contains('floating'));
+  });
+
+  window.addEventListener('resize', () => {
+    if (!controlsEl.classList.contains('floating')) return;
+    const rect = controlsEl.getBoundingClientRect();
+    clampControlsWidth();
+    clampControlsPosition(rect.left, rect.top);
+  });
+
+  let controlsDragState = null;
+  controlsDragHandle.addEventListener('pointerdown', (e) => {
+    const rect = controlsEl.getBoundingClientRect();
+    controlsDragState = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, startLeft: rect.left, startTop: rect.top };
+    controlsDragHandle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  controlsDragHandle.addEventListener('pointermove', (e) => {
+    if (!controlsDragState || e.pointerId !== controlsDragState.pointerId) return;
+    clampControlsPosition(
+      controlsDragState.startLeft + (e.clientX - controlsDragState.startX),
+      controlsDragState.startTop + (e.clientY - controlsDragState.startY)
+    );
+  });
+  function endControlsDrag(e) {
+    if (!controlsDragState || (e.pointerId != null && e.pointerId !== controlsDragState.pointerId)) return;
+    controlsDragState = null;
+    try {
+      const rect = controlsEl.getBoundingClientRect();
+      localStorage.setItem(CONTROLS_POS_KEY, JSON.stringify({ left: rect.left, top: rect.top }));
+    } catch (err) {}
+  }
+  controlsDragHandle.addEventListener('pointerup', endControlsDrag);
+  controlsDragHandle.addEventListener('pointercancel', endControlsDrag);
+
+  controlsOpacitySlider.addEventListener('input', () => {
+    const val = controlsOpacitySlider.value / 100;
+    controlsEl.style.setProperty('--controls-opacity', String(val));
+    try {
+      localStorage.setItem(CONTROLS_OPACITY_KEY, String(val));
+    } catch (e) {}
+  });
+  try {
+    const savedOpacity = localStorage.getItem(CONTROLS_OPACITY_KEY);
+    if (savedOpacity != null) {
+      controlsEl.style.setProperty('--controls-opacity', savedOpacity);
+      controlsOpacitySlider.value = String(Math.round(parseFloat(savedOpacity) * 100));
+    }
+  } catch (e) {}
+
+  try {
+    if (localStorage.getItem(CONTROLS_FLOATING_KEY) === '1') setControlsFloating(true);
+  } catch (e) {}
 
   function fmt(t) {
     if (!isFinite(t)) return '00:00';
