@@ -7,18 +7,23 @@
 </head>
 <body>
 <div class="app">
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <h1>Film Room</h1>
-      <button class="btn primary" id="openFiles">Open Video Files…</button>
-      <label class="field">FPS
-        <select id="fpsSelect" class="speed-select">
-          <option value="24">24</option>
-          <option value="25">25</option>
-          <option value="30" selected>30</option>
-          <option value="60">60</option>
-        </select>
-      </label>
+      <div class="sidebar-header-row">
+        <h1>Film Room</h1>
+        <button class="btn small sidebar-toggle" id="sidebarToggle" title="Collapse sidebar">‹</button>
+      </div>
+      <div class="sidebar-collapsible">
+        <button class="btn primary" id="openFiles">Open Video Files…</button>
+        <label class="field">FPS
+          <select id="fpsSelect" class="speed-select">
+            <option value="24">24</option>
+            <option value="25">25</option>
+            <option value="30" selected>30</option>
+            <option value="60">60</option>
+          </select>
+        </label>
+      </div>
     </div>
     <div class="clip-list" id="clipList">
       <div class="empty-hint">No clips loaded yet. Click "Open Video Files…" and pick MP4 files you've downloaded.</div>
@@ -99,6 +104,29 @@
   const canvas = document.getElementById('overlay');
   const placeholder = document.getElementById('placeholder');
   const player = new TelestrationPlayer({ video, canvas });
+
+  // ---- sidebar collapse ----
+  const sidebar = document.getElementById('sidebar');
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  const SIDEBAR_COLLAPSED_KEY = 'filmroom.sidebarCollapsed';
+
+  function setSidebarCollapsed(collapsed) {
+    sidebar.classList.toggle('collapsed', collapsed);
+    sidebarToggle.textContent = collapsed ? '›' : '‹';
+    sidebarToggle.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+    } catch (e) {}
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 160);
+  }
+
+  sidebarToggle.addEventListener('click', () => {
+    setSidebarCollapsed(!sidebar.classList.contains('collapsed'));
+  });
+
+  try {
+    if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1') setSidebarCollapsed(true);
+  } catch (e) {}
 
   function pathToFileUrl(p) {
     return 'file://' + encodeURI(p).replace(/#/g, '%23');

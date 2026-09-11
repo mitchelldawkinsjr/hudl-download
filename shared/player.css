@@ -41,6 +41,24 @@ html, body {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  transition: flex-basis 0.15s ease, width 0.15s ease;
+}
+
+.sidebar.collapsed {
+  width: 44px;
+  flex: 0 0 44px;
+}
+
+.sidebar.collapsed .sidebar-collapsible,
+.sidebar.collapsed .clip-list,
+.sidebar.collapsed .play-info,
+.sidebar.collapsed .sidebar-header h1 {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-header-row {
+  justify-content: center;
 }
 
 .sidebar-header {
@@ -51,11 +69,31 @@ html, body {
   gap: 8px;
 }
 
+.sidebar-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .sidebar-header h1 {
   font-size: 14px;
   margin: 0;
   color: var(--text);
   letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.sidebar-collapsible {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-toggle {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  line-height: 1;
 }
 
 .btn {

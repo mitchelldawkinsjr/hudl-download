@@ -21,24 +21,29 @@
 </head>
 <body>
 <div class="app">
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <h1>Film Room</h1>
-      <div style="display:flex;gap:6px;">
-        <button class="btn primary" id="openFolder" style="flex:1;">Open Folder…</button>
-        <button class="btn" id="openFiles" style="flex:1;">Open Files…</button>
+      <div class="sidebar-header-row">
+        <h1>Film Room</h1>
+        <button class="btn small sidebar-toggle" id="sidebarToggle" title="Collapse sidebar">‹</button>
       </div>
-      <input type="file" id="fileInput" accept="video/*,.json,application/json" multiple hidden />
-      <input type="file" id="folderInput" webkitdirectory directory multiple hidden />
-      <span style="font-size:11px;color:var(--text-dim);line-height:1.4;">"Open Folder…" loads a whole <code>FilmRoomDownloads/…</code> folder from the extension in one go — clips and their <code>.meta.json</code> Play Info come in together.</span>
-      <label class="field">FPS
-        <select id="fpsSelect" class="speed-select">
-          <option value="24">24</option>
-          <option value="25">25</option>
-          <option value="30" selected>30</option>
-          <option value="60">60</option>
-        </select>
-      </label>
+      <div class="sidebar-collapsible">
+        <div style="display:flex;gap:6px;">
+          <button class="btn primary" id="openFolder" style="flex:1;">Open Folder…</button>
+          <button class="btn" id="openFiles" style="flex:1;">Open Files…</button>
+        </div>
+        <input type="file" id="fileInput" accept="video/*,.json,application/json" multiple hidden />
+        <input type="file" id="folderInput" webkitdirectory directory multiple hidden />
+        <span style="font-size:11px;color:var(--text-dim);line-height:1.4;">"Open Folder…" loads a whole <code>FilmRoomDownloads/…</code> folder from the extension in one go — clips and their <code>.meta.json</code> Play Info come in together.</span>
+        <label class="field">FPS
+          <select id="fpsSelect" class="speed-select">
+            <option value="24">24</option>
+            <option value="25">25</option>
+            <option value="30" selected>30</option>
+            <option value="60">60</option>
+          </select>
+        </label>
+      </div>
     </div>
     <div class="clip-list" id="clipList">
       <div class="empty-hint">No clips loaded yet. Click "Open Folder…" and pick the FilmRoomDownloads folder you downloaded (or "Open Files…" for individual clips). Nothing leaves your browser — files are read locally.</div>

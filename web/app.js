@@ -8,6 +8,33 @@
   const placeholder = document.getElementById('placeholder');
   const player = new TelestrationPlayer({ video, canvas });
 
+  // ---- sidebar collapse ----
+  const sidebar = document.getElementById('sidebar');
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  const SIDEBAR_COLLAPSED_KEY = 'filmroom.sidebarCollapsed';
+
+  function setSidebarCollapsed(collapsed) {
+    sidebar.classList.toggle('collapsed', collapsed);
+    sidebarToggle.textContent = collapsed ? '›' : '‹';
+    sidebarToggle.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    try {
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+    } catch (e) {}
+    // Collapsing/expanding changes how much width the video-wrap has, but
+    // it's an internal layout change, not a window resize -- player.js
+    // only rescales its canvas on 'resize', so trigger that explicitly
+    // once the CSS width transition finishes.
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 160);
+  }
+
+  sidebarToggle.addEventListener('click', () => {
+    setSidebarCollapsed(!sidebar.classList.contains('collapsed'));
+  });
+
+  try {
+    if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1') setSidebarCollapsed(true);
+  } catch (e) {}
+
   // ---- library ----
   const clipList = document.getElementById('clipList');
   const playInfoEl = document.getElementById('playInfo');
