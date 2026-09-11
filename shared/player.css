@@ -23,6 +23,13 @@ html, body {
 .app {
   display: flex;
   height: 100%;
+  /* No-op everywhere except iOS/iPadOS home-screen apps with
+     viewport-fit=cover set (see index.html) -- there, content draws
+     edge-to-edge under the translucent status bar, so this keeps the
+     sidebar/toolbar clear of the notch/status-bar and side bezels. */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 /* ---------- Sidebar / library ---------- */
@@ -289,7 +296,7 @@ html, body {
 }
 
 .controls {
-  padding: 10px 14px 14px;
+  padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px));
   background: var(--bg-panel);
   border-top: 1px solid var(--border);
 }

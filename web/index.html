@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Film Room</title>
 <link rel="manifest" href="manifest.webmanifest" />
 <link rel="icon" href="icons/favicon-32.png" sizes="32x32" />
@@ -10,6 +10,13 @@
 <meta name="theme-color" content="#14161a" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-title" content="Film Room" />
+<!-- iOS/iPadOS home-screen web apps ignore the manifest's display/
+     display_override entirely -- "fullscreen" is Android-only. This is
+     the actual mechanism iOS offers: black-translucent makes the system
+     status bar an overlay instead of a solid bar, so content (with the
+     viewport-fit=cover + safe-area padding below) draws edge-to-edge
+     behind it -- the closest thing to fullscreen this platform allows. -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <link rel="stylesheet" href="../shared/player.css" />
 </head>
 <body>

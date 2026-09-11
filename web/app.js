@@ -239,12 +239,25 @@
     fullscreenBtn.textContent = isFullscreen() ? '⛶ Exit Fullscreen' : '⛶ Fullscreen';
   }
 
-  if (fullscreenTarget.requestFullscreen || fullscreenTarget.webkitRequestFullscreen) {
+  // iOS/iPadOS installed home-screen web apps (navigator.standalone) block
+  // Element.requestFullscreen() outright -- the method is still present
+  // (so the feature-detect below doesn't catch it) but every call rejects,
+  // silently: nothing visibly happens when the button is pressed, which is
+  // worse than not showing it at all. WebKit only allows the Fullscreen
+  // API inside a real Safari browsing context, not standalone-display mode.
+  const isIOSStandaloneApp = navigator.standalone === true;
+
+  if (!isIOSStandaloneApp && (fullscreenTarget.requestFullscreen || fullscreenTarget.webkitRequestFullscreen)) {
     fullscreenBtn.addEventListener('click', () => {
       if (isFullscreen()) {
         (document.exitFullscreen || document.webkitExitFullscreen).call(document);
       } else {
-        (fullscreenTarget.requestFullscreen || fullscreenTarget.webkitRequestFullscreen).call(fullscreenTarget);
+        const request = (fullscreenTarget.requestFullscreen || fullscreenTarget.webkitRequestFullscreen).call(fullscreenTarget);
+        // Some browsers reject instead of throwing (observed even outside
+        // the iOS-standalone case above, e.g. under stricter permission
+        // policies) -- catch it so the promise rejection isn't silently
+        // swallowed as an unhandled rejection with no visible feedback.
+        if (request && request.catch) request.catch(() => {});
       }
     });
     ['fullscreenchange', 'webkitfullscreenchange'].forEach((evt) => {
@@ -259,7 +272,8 @@
       });
     });
   } else {
-    // Fullscreen API unavailable (older Safari/iOS) -- hide rather than
+    // Fullscreen API unavailable, or blocked in this exact context (older
+    // Safari, or an installed iOS home-screen app) -- hide rather than
     // leave a dead button.
     fullscreenBtn.hidden = true;
   }
