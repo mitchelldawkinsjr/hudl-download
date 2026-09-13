@@ -259,6 +259,58 @@ html, body {
   flex: 1;
 }
 
+/* ---------- Compact horizontal play-info bar ----------
+   Shown only when the sidebar is collapsed -- the sidebar's vertical
+   .play-info panel is hidden in that state (see .sidebar.collapsed rules
+   above), so this thin bar keeps the play number and field details
+   visible. Layout mirrors .telestration-bar (horizontal flex, same panel
+   background/border) so it reads as a sibling toolbar row. Visibility is
+   toggled via the .show class from app.js, not the [hidden] attribute, so
+   the flex layout applies cleanly. */
+.play-info-bar {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.play-info-bar.show {
+  display: flex;
+}
+
+.play-info-bar-play {
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.play-info-bar-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.play-info-bar-item .k { color: var(--text-dim); }
+.play-info-bar-item .v { color: var(--text); }
+
+.play-info-bar-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+}
+
+.play-info-bar-empty {
+  font-style: italic;
+  color: var(--text-dim);
+}
+
 .note-chip {
   background: var(--bg-elevated);
   border: 1px solid var(--border);
@@ -291,6 +343,9 @@ html, body {
   aspect-ratio: 16 / 9;
   width: 100%;
   background: #000;
+  /* Clips the zoomed-in video/overlay to the wrap so a scaled-up frame
+     doesn't bleed into the telestration bar or transport controls. */
+  overflow: hidden;
 }
 
 .video-wrap video {
@@ -298,6 +353,8 @@ html, body {
   height: 100%;
   display: block;
   background: #000;
+  /* transform/transform-origin are set from JS (zoom); keep will-change
+     off here to avoid layer-promotion cost when at zoom=1. */
 }
 
 .video-wrap canvas {

@@ -70,6 +70,8 @@
       <button class="btn small" id="undoBtn">Undo</button>
       <button class="btn small" id="clearBtn">Clear Note</button>
       <button class="btn small" id="snapshotBtn">Save Snapshot</button>
+      <div class="sep"></div>
+      <button class="btn small" id="resetViewBtn" title="Reset zoom (scroll/pinch to zoom, double-click to reset)">Reset View</button>
     </div>
 
     <div class="notes-bar">
@@ -80,6 +82,11 @@
       <button class="btn small" id="loadNotesBtn">Load Notes</button>
       <input type="file" id="notesFileInput" accept="application/json,.json" hidden />
     </div>
+
+    <!-- Compact horizontal play-info, shown only when the sidebar is
+         collapsed (the sidebar's vertical .play-info panel is hidden in
+         that state). Mirrors the telestration bar's horizontal layout. -->
+    <div class="play-info-bar" id="playInfoBar"></div>
 
     <div class="video-stage">
       <div class="video-wrap">
@@ -102,11 +109,13 @@
         <input type="range" id="seekBar" min="0" max="1000" value="0" />
       </div>
       <div class="transport-row">
+        <button class="btn" id="prevPlayBtn" title="Previous play">‹‹ Play</button>
         <button class="btn" id="frameBack" title="Previous frame">⏮ Frame</button>
         <button class="btn" id="skipBack" title="Back 5s">« 5s</button>
         <button class="btn primary" id="playPause">Play</button>
         <button class="btn" id="skipFwd" title="Forward 5s">5s »</button>
         <button class="btn" id="frameFwd" title="Next frame">Frame ⏭</button>
+        <button class="btn" id="nextPlayBtn" title="Next play">Play ››</button>
         <div class="spacer"></div>
         <div class="speed-group" role="group" aria-label="Playback speed">
           <span class="speed-group-label">Speed</span>

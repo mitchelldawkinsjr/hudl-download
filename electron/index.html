@@ -50,6 +50,8 @@
       <button class="btn small" id="undoBtn">Undo</button>
       <button class="btn small" id="clearBtn">Clear Note</button>
       <button class="btn small" id="snapshotBtn">Save Snapshot</button>
+      <div class="sep"></div>
+      <button class="btn small" id="resetViewBtn" title="Reset zoom (scroll/pinch to zoom, double-click to reset)">Reset View</button>
     </div>
 
     <div class="notes-bar">
@@ -58,6 +60,11 @@
       <div class="spacer"></div>
       <span class="notes-label" id="notesSaveStatus"></span>
     </div>
+
+    <!-- Compact horizontal play-info, shown only when the sidebar is
+         collapsed (the sidebar's vertical .play-info panel is hidden in
+         that state). Mirrors the telestration bar's horizontal layout. -->
+    <div class="play-info-bar" id="playInfoBar"></div>
 
     <div class="video-stage">
       <div class="video-wrap">
@@ -80,11 +87,13 @@
         <input type="range" id="seekBar" min="0" max="1000" value="0" />
       </div>
       <div class="transport-row">
+        <button class="btn" id="prevPlayBtn" title="Previous play">‹‹ Play</button>
         <button class="btn" id="frameBack" title="Previous frame">⏮ Frame</button>
         <button class="btn" id="skipBack" title="Back 5s">« 5s</button>
         <button class="btn primary" id="playPause">Play</button>
         <button class="btn" id="skipFwd" title="Forward 5s">5s »</button>
         <button class="btn" id="frameFwd" title="Next frame">Frame ⏭</button>
+        <button class="btn" id="nextPlayBtn" title="Next play">Play ››</button>
         <div class="spacer"></div>
         <div class="speed-group" role="group" aria-label="Playback speed">
           <span class="speed-group-label">Speed</span>
@@ -124,6 +133,7 @@
     try {
       localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
     } catch (e) {}
+    playInfoBar.classList.toggle('show', collapsed && activeIndex >= 0);
     setTimeout(() => window.dispatchEvent(new Event('resize')), 160);
   }
 
@@ -142,6 +152,7 @@
   // ---- library ----
   const clipList = document.getElementById('clipList');
   const playInfoEl = document.getElementById('playInfo');
+  const playInfoBar = document.getElementById('playInfoBar');
   const clips = []; // { name, url, path }
   let activeIndex = -1;
   const notesSaveStatus = document.getElementById('notesSaveStatus');
@@ -154,14 +165,18 @@
       // stays hidden rather than showing a "no play info" placeholder.
       playInfoEl.innerHTML = '';
       playInfoEl.hidden = true;
+      playInfoBar.classList.remove('show');
       return;
     }
+    let data = null;
     try {
-      const data = await window.electronAPI.readPlayInfo(clip.path);
-      PlayInfo.renderPlayInfo(playInfoEl, data);
+      data = await window.electronAPI.readPlayInfo(clip.path);
     } catch (e) {
-      PlayInfo.renderPlayInfo(playInfoEl, null);
+      data = null;
     }
+    PlayInfo.renderPlayInfo(playInfoEl, data);
+    PlayInfo.renderPlayInfoBar(playInfoBar, data);
+    playInfoBar.classList.toggle('show', sidebar.classList.contains('collapsed'));
   }
 
   async function loadNotesForActiveClip() {
@@ -206,6 +221,7 @@
       el.addEventListener('click', () => selectClip(i));
       clipList.appendChild(el);
     });
+    updatePlayNavButtons();
   }
 
   function selectClip(i) {
@@ -215,6 +231,7 @@
     loadNotesForActiveClip();
     loadPlayInfoForActiveClip();
     renderClips();
+    updatePlayNavButtons();
   }
 
   document.getElementById('openFiles').addEventListener('click', async () => {
@@ -235,6 +252,20 @@
 
   document.getElementById('skipBack').addEventListener('click', () => player.seekBy(-5));
   document.getElementById('skipFwd').addEventListener('click', () => player.seekBy(5));
+
+  // ---- previous / next play (clip) ----
+  const prevPlayBtn = document.getElementById('prevPlayBtn');
+  const nextPlayBtn = document.getElementById('nextPlayBtn');
+  function updatePlayNavButtons() {
+    prevPlayBtn.disabled = activeIndex <= 0;
+    nextPlayBtn.disabled = activeIndex < 0 || activeIndex >= clips.length - 1;
+  }
+  prevPlayBtn.addEventListener('click', () => {
+    if (activeIndex > 0) selectClip(activeIndex - 1);
+  });
+  nextPlayBtn.addEventListener('click', () => {
+    if (activeIndex >= 0 && activeIndex < clips.length - 1) selectClip(activeIndex + 1);
+  });
 
   function bindHoldToStep(btn, dir) {
     const STEP_INTERVAL_MS = 90;
@@ -478,6 +509,7 @@
 
   document.getElementById('undoBtn').addEventListener('click', () => player.undo());
   document.getElementById('clearBtn').addEventListener('click', () => player.clearVisibleNote());
+  document.getElementById('resetViewBtn').addEventListener('click', () => player.resetZoom());
   document.getElementById('snapshotBtn').addEventListener('click', () => {
     const dataUrl = player.snapshot();
     const a = document.createElement('a');

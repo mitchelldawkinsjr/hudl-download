@@ -55,5 +55,32 @@
     container.innerHTML = html;
   }
 
-  global.PlayInfo = { renderPlayInfo };
+  // Compact horizontal variant of the play-info panel, shown in a thin bar
+  // under the notes bar when the sidebar is collapsed (so the play number
+  // and field details stay visible without the sidebar's vertical panel).
+  // Tables are omitted here -- they don't collapse to a single row -- so the
+  // sidebar's full panel remains the place to see them when expanded.
+  function renderPlayInfoBar(container, data) {
+    if (isEmpty(data)) {
+      container.innerHTML = '<span class="play-info-bar-empty">No play info captured for this clip.</span>';
+      return;
+    }
+    let html = '';
+    if (data.playLabel) {
+      html += `<span class="play-info-bar-play">Play ${escapeHtml(data.playLabel.replace(/^Play-/, ''))}</span>`;
+    }
+    if (data.videoId) {
+      if (html) html += '<span class="play-info-bar-sep"></span>';
+      html += `<span class="play-info-bar-item"><span class="k">Video ID</span><span class="v">${escapeHtml(data.videoId)}</span></span>`;
+    }
+    if (data.fields) {
+      for (const [k, v] of Object.entries(data.fields)) {
+        if (html) html += '<span class="play-info-bar-sep"></span>';
+        html += `<span class="play-info-bar-item"><span class="k">${escapeHtml(k)}</span><span class="v">${escapeHtml(v)}</span></span>`;
+      }
+    }
+    container.innerHTML = html || '<span class="play-info-bar-empty">No play info captured for this clip.</span>';
+  }
+
+  global.PlayInfo = { renderPlayInfo, renderPlayInfoBar };
 })(window);

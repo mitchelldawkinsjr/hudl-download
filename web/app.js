@@ -20,6 +20,10 @@
     try {
       localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
     } catch (e) {}
+    // The horizontal play-info bar only stands in for the sidebar's
+    // vertical panel while collapsed -- toggle it here (content was
+    // already rendered when the clip was selected) rather than re-render.
+    playInfoBar.classList.toggle('show', collapsed && activeIndex >= 0);
     // Collapsing/expanding changes how much width the video-wrap has, but
     // it's an internal layout change, not a window resize -- player.js
     // only rescales its canvas on 'resize', so trigger that explicitly
@@ -38,6 +42,7 @@
   // ---- library ----
   const clipList = document.getElementById('clipList');
   const playInfoEl = document.getElementById('playInfo');
+  const playInfoBar = document.getElementById('playInfoBar');
   const clips = []; // { name, url, key }
   const metaByBase = {}; // basename (no extension) -> parsed .meta.json content
   let activeIndex = -1;
@@ -70,9 +75,16 @@
       // stays hidden rather than showing a "no play info" placeholder.
       playInfoEl.innerHTML = '';
       playInfoEl.hidden = true;
+      playInfoBar.classList.remove('show');
       return;
     }
-    PlayInfo.renderPlayInfo(playInfoEl, metaByBase[clipBaseName(clip.name)]);
+    const data = metaByBase[clipBaseName(clip.name)];
+    PlayInfo.renderPlayInfo(playInfoEl, data);
+    PlayInfo.renderPlayInfoBar(playInfoBar, data);
+    // The horizontal bar only stands in for the sidebar panel when the
+    // sidebar is collapsed -- otherwise the sidebar's vertical panel is
+    // the one showing this info, and showing both would duplicate it.
+    playInfoBar.classList.toggle('show', sidebar.classList.contains('collapsed'));
   }
 
   function notesStorageKey(clipKey) {
@@ -113,6 +125,7 @@
       el.addEventListener('click', () => selectClip(i));
       clipList.appendChild(el);
     });
+    updatePlayNavButtons();
   }
 
   function selectClip(i) {
@@ -122,6 +135,7 @@
     loadNotesForActiveClip();
     renderPlayInfoForActive();
     renderClips();
+    updatePlayNavButtons();
   }
 
   const VIDEO_EXT_RE = /\.(mp4|m4v|mov|webm|mkv)$/i;
@@ -240,6 +254,20 @@
 
   document.getElementById('skipBack').addEventListener('click', () => player.seekBy(-5));
   document.getElementById('skipFwd').addEventListener('click', () => player.seekBy(5));
+
+  // ---- previous / next play (clip) ----
+  const prevPlayBtn = document.getElementById('prevPlayBtn');
+  const nextPlayBtn = document.getElementById('nextPlayBtn');
+  function updatePlayNavButtons() {
+    prevPlayBtn.disabled = activeIndex <= 0;
+    nextPlayBtn.disabled = activeIndex < 0 || activeIndex >= clips.length - 1;
+  }
+  prevPlayBtn.addEventListener('click', () => {
+    if (activeIndex > 0) selectClip(activeIndex - 1);
+  });
+  nextPlayBtn.addEventListener('click', () => {
+    if (activeIndex >= 0 && activeIndex < clips.length - 1) selectClip(activeIndex + 1);
+  });
 
   // Press-and-hold repeats stepFrame at a fixed real-time interval instead
   // of one step per click -- since each step only advances 1/fps of video
@@ -533,6 +561,7 @@
 
   document.getElementById('undoBtn').addEventListener('click', () => player.undo());
   document.getElementById('clearBtn').addEventListener('click', () => player.clearVisibleNote());
+  document.getElementById('resetViewBtn').addEventListener('click', () => player.resetZoom());
   document.getElementById('snapshotBtn').addEventListener('click', () => {
     const dataUrl = player.snapshot();
     const a = document.createElement('a');

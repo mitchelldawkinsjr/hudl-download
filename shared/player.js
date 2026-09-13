@@ -36,6 +36,18 @@
       // entirely during forward playback.
       this._lastTimeMs = 0;
 
+      // ---- zoom & pan ----
+      // The video and overlay canvas are CSS-transformed together (same
+      // scale + translate, transform-origin 0 0) so telestrations stay
+      // aligned with the video at every zoom level. Because both share
+      // the transform, _point()'s getBoundingClientRect() already accounts
+      // for it -- strokes drawn while zoomed land at the right video-space
+      // normalized coordinate and replay correctly at any other zoom.
+      this.zoom = 1;       // 1 = fit; >1 = zoomed in
+      this.offsetX = 0;    // px translation of the scaled video inside .video-wrap
+      this.offsetY = 0;
+      this.onZoomChanged = null; // optional host callback: (zoom) => void
+
       this.video.addEventListener('loadedmetadata', () => this._resizeCanvas());
       this.video.addEventListener('timeupdate', () => {
         this._checkNoteStop();
@@ -48,8 +60,12 @@
       this.video.addEventListener('seeking', () => {
         this._lastTimeMs = this._currentTimeMs();
       });
-      window.addEventListener('resize', () => this._resizeCanvas());
+      window.addEventListener('resize', () => {
+        this._resizeCanvas();
+        this._clampAndApply();
+      });
       this._bindCanvasEvents();
+      this._bindZoomEvents();
       this._resizeCanvas();
     }
 
@@ -67,6 +83,9 @@
       this.notes = [];
       this.activeNote = null;
       this._lastTimeMs = 0;
+      // Each clip starts at fit-to-frame; a saved zoom from the previous
+      // clip would be meaningless against a different video.
+      this.resetZoom();
       // Container size is known immediately from layout; don't wait on
       // metadata (which may be slow/never arrive) to size the canvas.
       requestAnimationFrame(() => this._resizeCanvas());
@@ -273,26 +292,59 @@
     }
 
     _resizeCanvas() {
-      const rect = this.canvas.getBoundingClientRect();
+      // offsetWidth/offsetHeight ignore the CSS zoom transform (which
+      // getBoundingClientRect would reflect), so the canvas backing store
+      // stays sized to the wrap's untransformed layout size regardless of
+      // the current zoom -- otherwise zooming in would blow up the backing
+      // resolution (and rescale every saved stroke).
+      const w = this.canvas.offsetWidth;
+      const h = this.canvas.offsetHeight;
       const dpr = window.devicePixelRatio || 1;
-      this.canvas.width = Math.max(1, Math.round(rect.width * dpr));
-      this.canvas.height = Math.max(1, Math.round(rect.height * dpr));
+      this.canvas.width = Math.max(1, Math.round(w * dpr));
+      this.canvas.height = Math.max(1, Math.round(h * dpr));
       this._redraw();
     }
 
     _bindCanvasEvents() {
       const c = this.canvas;
+      // Active pointers on the canvas, keyed by pointerId. Tracked so a
+      // second finger (pinch) can interrupt an in-progress single-finger
+      // stroke without the first finger's pointerup firing first and
+      // committing a stray mark. `moved` flags whether each pointer
+      // travelled past the tap threshold -- used to tell a real tap (which
+      // can be the first half of a double-tap-to-reset) from a drag.
+      const pointers = new Map();
+      let lastTap = 0; // timestamp of the last single-finger tap (touch)
+
       c.addEventListener('pointerdown', (e) => {
-        // Freeze playback at the instant drawing starts. Without this, a
-        // stroke drawn while the video keeps playing gets stamped with its
-        // start timestamp but finishes (and is redrawn) once currentTime
-        // has already moved past the visibility tolerance -- so it vanishes
-        // the moment you lift the pen, which is the "doesn't show" bug.
+        pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, moved: false });
+        // Capture every pointer (not just the drawing pointer) so a finger
+        // that drifts off the canvas onto the toolbar during a pinch keeps
+        // delivering pointermove/pointerup here -- otherwise its entry in
+        // `pointers` would go stale and make the next tap look like a
+        // two-finger gesture.
+        try { c.setPointerCapture(e.pointerId); } catch (err) {}
+
+        if (pointers.size === 2) {
+          // Second finger lands: start a pinch. Cancel any stroke the
+          // first finger was mid-draw on, so it doesn't get committed as a
+          // one-point stroke (which would render as nothing but still
+          // create an empty note).
+          if (this.drawing) {
+            this.drawing = false;
+            this.currentStroke = null;
+            this.activeNote = null;
+            this._redraw();
+          }
+          this._pinch = this._pinchStart(pointers);
+          return;
+        }
+        if (pointers.size > 2) return;
+
+        // Exactly one pointer: existing single-finger behaviour (draw or
+        // place text). Pinch zoom/pan never enters this branch.
         this.video.pause();
 
-        // Text is a click-to-place inline text box, not a drag gesture --
-        // handled entirely separately from the pointermove/pointerup drag
-        // lifecycle below.
         if (this.tool === 'text') {
           // A real (trusted) mousedown's default action moves focus to the
           // nearest focusable ancestor of its target -- canvas isn't
@@ -306,7 +358,6 @@
           return;
         }
 
-        c.setPointerCapture(e.pointerId);
         this.drawing = true;
         this.activeNote = this._noteForDrawing();
         const p = this._point(e);
@@ -318,13 +369,45 @@
         };
       });
       c.addEventListener('pointermove', (e) => {
+        if (!pointers.has(e.pointerId)) return;
+        const entry = pointers.get(e.pointerId);
+        // Mark the pointer as having moved beyond a small tap threshold so
+        // its pointerup isn't counted as a tap (and thus can't be the first
+        // half of a double-tap-to-reset). 8px is small enough that a real
+        // tap on a touchscreen stays under it, large enough that the
+        // jitter of a finger resting on the glass doesn't disqualify it.
+        if (!entry.moved) {
+          if (Math.abs(e.clientX - entry.x) > 8 || Math.abs(e.clientY - entry.y) > 8) {
+            entry.moved = true;
+          }
+        }
+        entry.x = e.clientX;
+        entry.y = e.clientY;
+
+        if (pointers.size >= 2 && this._pinch) {
+          this._pinchMove(pointers);
+          return;
+        }
+
         if (!this.drawing || !this.currentStroke) return;
         const p = this._point(e);
         if (this.tool === 'pen') this.currentStroke.points.push(p);
         else this.currentStroke.points[1] = p;
         this._redraw(true);
       });
-      const end = () => {
+      const end = (e) => {
+        // Two-finger gestures end by lifting either finger; treat the
+        // first pointerup during a pinch as the end of the pinch (the
+        // remaining finger, if it stays down, will start a fresh
+        // single-pointer draw on its next move).
+        if (this._pinch) {
+          pointers.delete(e.pointerId);
+          if (pointers.size < 2) {
+            this._pinch = null;
+          }
+          return;
+        }
+        pointers.delete(e.pointerId);
         if (!this.drawing) return;
         this.drawing = false;
         if (this.currentStroke && this.currentStroke.points.length > 1 && this.activeNote) {
@@ -335,8 +418,174 @@
         this.activeNote = null;
         this._redraw();
       };
-      c.addEventListener('pointerup', end);
+      c.addEventListener('pointerup', (e) => {
+        // Double-tap-to-reset on touch: two single-finger taps (no drag)
+        // within 300ms. A "tap" here is a touch pointer that never moved
+        // past the 8px threshold above and is the only active pointer -- so
+        // the second finger lifting at the end of a pinch (which did
+        // move) can't be misread as a tap and reset the zoom the user just
+        // set. Text tool is excluded so placing a text box doesn't fight
+        // with the reset gesture.
+        const entry = pointers.get(e.pointerId);
+        if (
+          e.pointerType === 'touch' &&
+          entry && !entry.moved &&
+          pointers.size === 1 &&
+          this.tool !== 'text' &&
+          this.zoom > 1
+        ) {
+          const now = performance.now();
+          if (now - lastTap < 300) {
+            this.resetZoom();
+            lastTap = 0;
+          } else {
+            lastTap = now;
+          }
+        }
+        end(e);
+      });
       c.addEventListener('pointercancel', end);
+    }
+
+    // ---------------- zoom & pan ----------------
+    //
+    // Two input modes, both always available so they compose with
+    // telestration (single-finger drawing is never taken away):
+    //   - Web (mouse): wheel over the video zooms toward the cursor;
+    //     double-click resets to fit.
+    //   - Tablet (touch): two-finger pinch zooms (toward the midpoint) and
+    //     two-finger drag pans; double-tap resets to fit.
+    // Single-finger input always draws, regardless of zoom -- so you can
+    // zoom in to draw precisely and zoom back out, exactly like Procreate's
+    // gesture model.
+
+    _bindZoomEvents() {
+      const c = this.canvas;
+
+      c.addEventListener(
+        'wheel',
+        (e) => {
+          // Page-scroll-on-wheel over the video is never useful here (the
+          // page doesn't scroll -- .video-stage is flex-filled), so claim
+          // the gesture for zoom unconditionally.
+          e.preventDefault();
+          const rect = c.parentElement.getBoundingClientRect();
+          const mx = e.clientX - rect.left;
+          const my = e.clientY - rect.top;
+          // Smooth, exponentially-scaled steps: each wheel tick scales by
+          // ~1.1, with sign flipped so trackpad "scroll up to zoom in"
+          // matches the convention of every other image/video viewer.
+          const factor = Math.exp(-e.deltaY * 0.0015);
+          this.setZoom(this.zoom * factor, mx, my);
+        },
+        { passive: false }
+      );
+
+      // Double-click resets (mouse). Touch double-tap is handled in the
+      // pointerup handler above (synthetic dblclick on touch is unreliable).
+      c.addEventListener('dblclick', () => this.resetZoom());
+    }
+
+    setZoom(newZoom, focalX, focalY) {
+      const wrap = this.canvas.parentElement;
+      const rect = wrap.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      const z = Math.min(Math.max(newZoom, 1), 8);
+
+      // Keep the point under the focal point stationary in screen space:
+      // videoSpace = (focal - offset) / oldZoom, and we want
+      // focal = newOffset + videoSpace * z, so
+      // newOffset = focal - (focal - offset) * (z / oldZoom).
+      const fx = focalX != null ? focalX : w / 2;
+      const fy = focalY != null ? focalY : h / 2;
+      const ratio = z / this.zoom;
+      let nx = fx - (fx - this.offsetX) * ratio;
+      let ny = fy - (fy - this.offsetY) * ratio;
+
+      this.zoom = z;
+      this.offsetX = nx;
+      this.offsetY = ny;
+      this._clampAndApply();
+    }
+
+    resetZoom() {
+      this.zoom = 1;
+      this.offsetX = 0;
+      this.offsetY = 0;
+      this._clampAndApply();
+    }
+
+    // Clamp the offset so the scaled video always fully covers the wrap
+    // (no empty bars when zoomed in). When the scaled video is smaller
+    // than the wrap on an axis (shouldn't happen since zoom >= 1, but
+    // guards against sub-pixel gaps), center it.
+    _clampOffset() {
+      const rect = this.canvas.parentElement.getBoundingClientRect();
+      const w = rect.width;
+      const h = rect.height;
+      const sw = w * this.zoom;
+      const sh = h * this.zoom;
+      if (sw <= w) this.offsetX = (w - sw) / 2;
+      else this.offsetX = Math.min(0, Math.max(w - sw, this.offsetX));
+      if (sh <= h) this.offsetY = (h - sh) / 2;
+      else this.offsetY = Math.min(0, Math.max(h - sh, this.offsetY));
+    }
+
+    _clampAndApply() {
+      this._clampOffset();
+      const t = `translate(${this.offsetX}px, ${this.offsetY}px) scale(${this.zoom})`;
+      this.video.style.transform = t;
+      this.canvas.style.transform = t;
+      this.video.style.transformOrigin = '0 0';
+      this.canvas.style.transformOrigin = '0 0';
+      if (typeof this.onZoomChanged === 'function') this.onZoomChanged(this.zoom);
+    }
+
+    _pinchStart(pointers) {
+      const [a, b] = Array.from(pointers.values());
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const rect = this.canvas.parentElement.getBoundingClientRect();
+      return {
+        dist: Math.hypot(dx, dy),
+        midX: (a.x + b.x) / 2 - rect.left,
+        midY: (a.y + b.y) / 2 - rect.top,
+        zoom: this.zoom,
+        offsetX: this.offsetX,
+        offsetY: this.offsetY,
+      };
+    }
+
+    _pinchMove(pointers) {
+      const p = this._pinch;
+      if (!p) return;
+      const [a, b] = Array.from(pointers.values());
+      const rect = this.canvas.parentElement.getBoundingClientRect();
+      const mx = (a.x + b.x) / 2 - rect.left;
+      const my = (a.y + b.y) / 2 - rect.top;
+      const dist = Math.hypot(b.x - a.x, b.y - a.y);
+
+      // Pan delta: how far the midpoint has moved since the gesture start.
+      const panDx = mx - p.midX;
+      const panDy = my - p.midY;
+
+      // Zoom ratio relative to the gesture start.
+      const ratio = p.dist > 0 ? dist / p.dist : 1;
+      const newZoom = Math.min(Math.max(p.zoom * ratio, 1), 8);
+
+      // Anchor the zoom on the *initial* midpoint: the video-space point
+      // under that midpoint at gesture start is
+      //   v = (midX - startOffsetX) / startZoom
+      // and we want it to end up at the *current* midpoint (which has moved
+      // by panDx), so:
+      //   newOffsetX = (midX + panDx) - v * newZoom
+      //              = midX + panDx - (midX - startOffsetX) * (newZoom / startZoom)
+      const zr = newZoom / p.zoom;
+      this.zoom = newZoom;
+      this.offsetX = p.midX + panDx - (p.midX - p.offsetX) * zr;
+      this.offsetY = p.midY + panDy - (p.midY - p.offsetY) * zr;
+      this._clampAndApply();
     }
 
     // Places an inline <input> over the canvas at the clicked position, so
