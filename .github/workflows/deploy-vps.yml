@@ -1,0 +1,134 @@
+name: Deploy to prod VPS
+
+# Deploys the static web app (web/, shared/, sw.js, privacy.html) to the
+# filmroom-web container on the prod VPS. That container is nginx:alpine
+# with /opt/filmroom bind-mounted to /usr/share/nginx/html, so rsyncing
+# files into /opt/filmroom is the entire deploy -- no rebuild or restart
+# is needed (nginx serves the bind mount directly, and the service
+# worker's bumped CACHE_NAME handles client-side cache invalidation).
+#
+# Mirrors the deploy pattern used by wnba-stat-spot and the other 360ws
+# prod projects: webfactory/ssh-agent + ssh-keyscan + rsync + health check
+# + optional Slack notification.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'shared/**'
+      - 'sw.js'
+      - 'privacy.html'
+      - '.github/workflows/deploy-vps.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy filmroom-web to prod
+    runs-on: ubuntu-latest
+    env:
+      SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Add server to known hosts
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT || '22' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VPS_HOST}" ]; then
+            echo "::error::Missing required secret VPS_HOST."
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          touch ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 10 -p "${VPS_SSH_PORT}" -H "${VPS_HOST}" >> ~/.ssh/known_hosts; then
+              sort -u ~/.ssh/known_hosts -o ~/.ssh/known_hosts
+              exit 0
+            fi
+            echo "ssh-keyscan attempt ${attempt}/3 failed for ${VPS_HOST}:${VPS_SSH_PORT}; retrying..."
+            sleep 5
+          done
+
+          echo "::error::Unable to scan SSH host key for ${VPS_HOST}:${VPS_SSH_PORT}. Verify VPS_HOST, VPS_SSH_PORT, DNS, and firewall access from GitHub Actions."
+          exit 1
+
+      - name: Rsync app shell to /opt/filmroom
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT || '22' }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VPS_USER}" ]; then
+            echo "::error::Missing required secret VPS_USER."
+            exit 1
+          fi
+
+          SSH_OPTS="ssh -p ${VPS_SSH_PORT} -o StrictHostKeyChecking=yes"
+          TARGET="${VPS_USER}@${VPS_HOST}"
+          REMOTE="/opt/filmroom"
+
+          # Ensure the deploy dir exists (first run on a fresh VPS).
+          ${SSH_OPTS} "${TARGET}" "mkdir -p ${REMOTE}/web ${REMOTE}/shared"
+
+          # web/ and shared/ are kept strictly in sync with the repo
+          # (--delete removes any stale files, e.g. renamed icons or
+          # retired shared modules).
+          rsync -avz --delete -e "${SSH_OPTS}" ./web/    "${TARGET}:${REMOTE}/web/"
+          rsync -avz --delete -e "${SSH_OPTS}" ./shared/  "${TARGET}:${REMOTE}/shared/"
+
+          # Root-level files are copied WITHOUT --delete: /opt/filmroom also
+          # holds VPS-only files the repo doesn't track (docker-compose.yml,
+          # the top-level index.html landing, scripts/), which must not be
+          # removed by a deploy.
+          rsync -avz -e "${SSH_OPTS}" ./sw.js ./privacy.html "${TARGET}:${REMOTE}/"
+
+      - name: Health check (public URL + new-code verification)
+        env:
+          PUBLIC_URL: https://filmroom.360web.cloud
+        run: |
+          set -euo pipefail
+
+          # Give nginx a moment to serve the freshly written files.
+          sleep 2
+
+          echo "Checking ${PUBLIC_URL}/ ..."
+          curl -fsSL -o /dev/null "${PUBLIC_URL}/"
+
+          echo "Verifying the new shared/player.js is live (contains resetZoom) ..."
+          curl -fsSL "${PUBLIC_URL}/shared/player.js" | grep -q "resetZoom"
+
+          echo "Verifying the new sw.js cache version is live ..."
+          curl -fsSL "${PUBLIC_URL}/sw.js" | grep -q "film-room-shell-v11"
+
+          echo "Health check passed -- new code is live."
+
+      - name: Notify Slack on success
+        if: success() && env.SLACK_WEBHOOK != ''
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"✅ filmroom.360web.cloud deployed successfully to prod VPS\"}" \
+            "$SLACK_WEBHOOK"
+
+      - name: Notify Slack on failure
+        if: failure() && env.SLACK_WEBHOOK != ''
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"❌ filmroom.360web.cloud deployment to prod VPS failed\"}" \
+            "$SLACK_WEBHOOK"
