@@ -111,11 +111,17 @@ jobs:
           echo "Checking ${PUBLIC_URL}/ ..."
           curl -fsSL -o /dev/null "${PUBLIC_URL}/"
 
+          # Fetch to temp files and grep those, rather than `curl | grep -q`:
+          # grep -q closes the pipe as soon as it matches, which makes curl
+          # exit 23 (SIGPIPE / "failure writing output") and trips pipefail
+          # even though the content is correct.
           echo "Verifying the new shared/player.js is live (contains resetZoom) ..."
-          curl -fsSL "${PUBLIC_URL}/shared/player.js" | grep -q "resetZoom"
+          curl -fsSL "${PUBLIC_URL}/shared/player.js" -o /tmp/player.js
+          grep -q "resetZoom" /tmp/player.js
 
           echo "Verifying the new sw.js cache version is live ..."
-          curl -fsSL "${PUBLIC_URL}/sw.js" | grep -q "film-room-shell-v11"
+          curl -fsSL "${PUBLIC_URL}/sw.js" -o /tmp/sw.js
+          grep -q "film-room-shell-v11" /tmp/sw.js
 
           echo "Health check passed -- new code is live."
 
