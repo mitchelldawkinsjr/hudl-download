@@ -7,6 +7,11 @@ const { test, expect } = require('@playwright/test');
 const BASE = 'http://127.0.0.1:8081';
 const SETTINGS = `${BASE}/web/settings.html`;
 
+async function resetDb(page) {
+  // Test-only: clean slate so parallel/serial tests don't share source rows.
+  await page.request.post(`${BASE}/api/v1/_test/reset`);
+}
+
 async function login(page) {
   await page.goto(SETTINGS);
   await page.locator('#loginEmail').fill('admin@test.test');
@@ -16,6 +21,7 @@ async function login(page) {
 }
 
 test('Sources & Settings: configure, test, assign, and persist on refresh', async ({ page }) => {
+  await resetDb(page);
   await login(page);
 
   // (a) Configure the MediaMTX server to point at the mock Control API.

@@ -67,7 +67,7 @@ async function migrate() {
 }
 
 async function resetDb() {
-  for (const t of ['audit_events', 'telestrations', 'media_jobs', 'play_angles', 'plays',
+  for (const t of ['events', 'audit_events', 'telestrations', 'media_jobs', 'play_angles', 'plays',
     'game_sources', 'source_status_snapshots', 'sources', 'mediamtx_server_settings', 'games',
     'team_members', 'teams', 'users']) {
     await query(`truncate table ${t} cascade`);
@@ -213,6 +213,14 @@ test('Phase 3 gate: marked synthetic play → two validated MP4 angles, paths fr
     // Jobs marked succeeded.
     const jobs = await query("select status from media_jobs where status='succeeded'");
     assert.equal(jobs.rows.length, 2);
+
+    // The worker emitted a play.angle.updated event per angle (Phase 4 feed).
+    const ev = await query("select type, payload_json from events where game_id = $1 and type = 'play.angle.updated'", [s.gameId]);
+    assert.equal(ev.rows.length, 2, 'one event per angle');
+    assert.ok(ev.rows.every((r) => {
+      const p = typeof r.payload_json === 'string' ? JSON.parse(r.payload_json) : r.payload_json;
+      return p.status === 'ready';
+    }));
   } finally { await stopStub(); }
 });
 

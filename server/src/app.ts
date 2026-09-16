@@ -16,6 +16,8 @@ import { settingsRouter } from './routes/settings.js';
 import { sourcesRouter } from './routes/sources.js';
 import { gamesRouter } from './routes/games.js';
 import { playsRouter } from './routes/plays.js';
+import { eventsRouter } from './routes/events.js';
+import { testResetRouter } from './routes/test-reset.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -37,6 +39,12 @@ export function createApp() {
   app.use(`${base}/sources`, sourcesRouter);   // /sources, /sources/:id/...
   app.use(`${base}/games`, gamesRouter);        // /games, /games/:id/...
   app.use(`${base}`, playsRouter);             // /games/:id/plays, /plays/:id, /play-angles/:id/sync
+  app.use(`${base}`, eventsRouter);            // /games/:id/events
+
+  // Test-only reset endpoint (never mounted in production).
+  if (env.NODE_ENV === 'test') {
+    app.use(`${base}`, testResetRouter);
+  }
 
   // Dev/test convenience: serve the repo root statically so the admin UI and
   // the API share an origin (avoids cross-origin cookie/CORS for local E2E).

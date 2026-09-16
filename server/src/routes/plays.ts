@@ -159,7 +159,28 @@ playsRouter.get(
     }
     sql += ` order by play_number desc limit 200`;
     const { rows } = await query(sql, params, { tag: 'plays.list' });
-    res.json({ data: rows.map((r) => playToJson(r)) });
+    // Include per-angle status chips (live recent-plays needs them).
+    const ids = rows.map((r) => r.id);
+    let anglesByPlay: Record<string, Record<string, unknown>[]> = {};
+    if (ids.length) {
+      const ar = await query(
+        `select pa.*, p.id as play_id, s.key as source_key, s.mediamtx_path
+           from play_angles pa
+           join plays p on p.id = pa.play_id
+           join sources s on s.id = pa.source_id
+          where p.id = any($1::uuid[])
+          order by p.id, s.sort_order`,
+        [ids],
+        { tag: 'plays.list.angles' }
+      );
+      for (const a of ar.rows) {
+        (anglesByPlay[a.play_id] ||= []).push({
+          id: a.id, sourceId: a.source_id, sourceKey: a.source_key,
+          status: a.status, clipUri: a.clip_uri, errorCode: a.error_code,
+        });
+      }
+    }
+    res.json({ data: rows.map((r) => playToJson(r, anglesByPlay[r.id] || [])) });
   })
 );
 

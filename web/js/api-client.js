@@ -81,5 +81,18 @@
       sources: (id) => request('GET', '/games/' + id + '/sources'),
       assign: (id, assignments) => request('POST', '/games/' + id + '/sources', { body: { assignments } }),
     },
+    plays: {
+      mark: (gameId, body, idempotencyKey) => request('POST', '/games/' + gameId + '/plays', {
+        body: body || {}, headers: idempotencyKey ? { 'idempotency-key': idempotencyKey } : undefined,
+      }),
+      list: (gameId, status) => request('GET', '/games/' + gameId + '/plays' + (status ? '?status=' + status : '')),
+      get: (id) => request('GET', '/plays/' + id),
+      patch: (id, body) => request('PATCH', '/plays/' + id, { body }),
+      retry: (id, force) => request('POST', '/plays/' + id + '/retry' + (force ? '?force=true' : '')),
+      syncAngle: (angleId, syncOffsetMs) => request('PATCH', '/play-angles/' + angleId + '/sync', { body: { syncOffsetMs } }),
+    },
+    events: {
+      list: (gameId, since, limit) => request('GET', '/games/' + gameId + '/events?since=' + (since || 0) + (limit ? '&limit=' + limit : '')),
+    },
   };
 })();

@@ -1,0 +1,55 @@
+/* Film Room Live operator screen. Reuses tokens from player.css. */
+[hidden] { display: none !important; }
+
+.live-app { max-width: 1100px; margin: 0 auto; padding: 16px; color: var(--text, #eee); }
+.gate { display: grid; place-items: center; min-height: 60vh; }
+.gate-form { display: grid; gap: 10px; width: 280px; }
+.gate-form h1 { margin: 0 0 8px; font-size: 18px; }
+.gate-form input { padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #eee; }
+.gate-form button { padding: 9px; border: 0; border-radius: 6px; background: var(--accent, #3b82f6); color: #fff; font-weight: 600; }
+.error { color: var(--danger, #ef4444); font-size: 13px; }
+
+.live-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--panel, #1e1e1e); border-radius: 10px; }
+.game-meta h1 { margin: 0; font-size: 18px; }
+.state-chip { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #333; }
+.state-chip[data-state="live"] { background: #16a34a; color: #fff; }
+.state-chip[data-state="ended"] { background: #444; }
+.game-controls { display: flex; gap: 8px; align-items: center; }
+.game-select select { padding: 6px; border-radius: 6px; background: #222; color: #eee; border: 1px solid #444; }
+.status-bar { display: flex; gap: 12px; font-size: 12px; color: var(--text-dim, #aaa); }
+.net[data-state="connected"] { color: #22c55e; }
+.net[data-state="stale"], .net[data-state="error"] { color: #f59e0b; }
+.net[data-state="offline"] { color: var(--danger, #ef4444); }
+
+.previews { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin: 14px 0; }
+.preview-card { background: var(--panel, #1e1e1e); border-radius: 10px; overflow: hidden; border: 1px solid #333; }
+.preview-card .preview-head { display: flex; justify-content: space-between; padding: 8px 10px; font-size: 13px; }
+.preview-card .preview-state { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: #333; }
+.preview-card[data-preview="working"] .preview-state { background: #16a34a; color: #fff; }
+.preview-card[data-preview="offline"] .preview-state { background: #444; color: #f59e0b; }
+.preview-card .preview-video-wrap { position: relative; aspect-ratio: 16/9; background: #000; }
+.preview-card video { width: 100%; height: 100%; display: block; }
+.preview-card .preview-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: #888; font-size: 13px; }
+.preview-card .preview-foot { padding: 6px 10px; font-size: 12px; color: var(--text-dim, #aaa); display: flex; justify-content: space-between; }
+.preview-card .retry-btn { background: transparent; color: var(--accent, #3b82f6); border: 0; font-size: 12px; cursor: pointer; }
+
+.mark-bar { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 10px 0; }
+.mark-play { min-height: 72px; min-width: 220px; border: 0; border-radius: 12px; background: var(--accent, #3b82f6); color: #fff; font-weight: 700; font-size: 20px; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.mark-play:disabled { background: #444; cursor: not-allowed; opacity: .7; }
+.mark-play .mark-hint { font-size: 11px; font-weight: 400; opacity: .85; }
+.mark-status { font-size: 13px; min-height: 18px; color: var(--text-dim, #aaa); }
+.mark-status[data-state="error"] { color: var(--danger, #ef4444); }
+.mark-status[data-state="ok"] { color: #22c55e; }
+
+.recent h2 { font-size: 15px; margin: 14px 0 6px; }
+.recent-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.recent-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--panel, #1e1e1e); border-radius: 8px; }
+.recent-item .pn { font-weight: 700; min-width: 40px; }
+.recent-item .angles { display: flex; gap: 6px; flex-wrap: wrap; }
+.angle-chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #333; }
+.angle-chip[data-status="ready"] { background: #16a34a; color: #fff; }
+.angle-chip[data-status="processing"] { background: #2563eb; color: #fff; }
+.angle-chip[data-status="queued"] { background: #444; }
+.angle-chip[data-status="missing"] { background: #7c5a00; color: #ffd; }
+.angle-chip[data-status="failed"] { background: #7f1d1d; color: #fee; }
+.empty { color: var(--text-dim, #aaa); font-size: 13px; }

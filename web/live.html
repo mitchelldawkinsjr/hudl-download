@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Film Room — Live</title>
+  <link rel="stylesheet" href="../shared/player.css" />
+  <link rel="stylesheet" href="css/live.css" />
+</head>
+<body class="live-app">
+  <!-- Login gate -->
+  <section id="loginGate" class="gate">
+    <form id="loginForm" class="gate-form">
+      <h1>Film Room — Live</h1>
+      <label>Email <input id="loginEmail" type="email" required autocomplete="username" /></label>
+      <label>Password <input id="loginPassword" type="password" required autocomplete="current-password" /></label>
+      <button type="submit">Sign in</button>
+      <p id="loginError" class="error" hidden></p>
+    </form>
+  </section>
+
+  <!-- Main -->
+  <main id="liveMain" hidden>
+    <header class="live-header">
+      <div class="game-meta">
+        <h1 id="gameTitle">—</h1>
+        <p id="gameState" class="state-chip">draft</p>
+        <p id="gameClock" class="clock" hidden></p>
+      </div>
+      <div class="game-controls">
+        <label class="game-select">
+          Game
+          <select id="gameSelect"></select>
+        </label>
+        <button id="startGameBtn" type="button">Start game</button>
+        <button id="endGameBtn" type="button" hidden>End game</button>
+      </div>
+      <div class="status-bar">
+        <span id="networkStatus" class="net" data-state="unknown">network: …</span>
+        <span id="userTag" class="user"></span>
+      </div>
+    </header>
+
+    <section class="previews" id="previewGrid" aria-label="Live previews"></section>
+
+    <section class="mark-bar">
+      <button id="markPlayBtn" type="button" class="mark-play" disabled aria-label="Mark play (pre-roll 18s, post-roll 3s)">
+        <span class="mark-label">Mark Play</span>
+        <span class="mark-hint" id="captureHint">pre-roll 18s · post-roll 3s</span>
+      </button>
+      <p id="markStatus" class="mark-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="recent">
+      <h2>Recent plays</h2>
+      <ul id="recentList" class="recent-list"></ul>
+      <p id="recentEmpty" class="empty">No plays yet. Mark a play to start.</p>
+    </section>
+  </main>
+
+  <script src="js/api-client.js"></script>
+  <script src="js/event-client.js"></script>
+  <script src="js/live-controller.js"></script>
+</body>
+</html>

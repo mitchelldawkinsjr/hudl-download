@@ -42,6 +42,12 @@ export function csrfProtect(req: Request, _res: Response, next: NextFunction) {
     next();
     return;
   }
+  // Test-only reset endpoint bypasses CSRF (never mounted in production).
+  // req.path is the full path (e.g. /api/v1/_test/reset), so match by suffix.
+  if (process.env.NODE_ENV === 'test' && req.path.includes('/_test/')) {
+    next();
+    return;
+  }
   const cookie = req.cookies?.[COOKIE];
   const header = req.headers[HEADER];
   if (

@@ -23,7 +23,7 @@ export interface TestContext {
 }
 
 const TABLES = [
-  'audit_events', 'telestrations', 'media_jobs', 'play_angles', 'plays',
+  'events', 'audit_events', 'telestrations', 'media_jobs', 'play_angles', 'plays',
   'game_sources', 'source_status_snapshots', 'sources', 'mediamtx_server_settings', 'games',
   'team_members', 'teams', 'users',
 ];

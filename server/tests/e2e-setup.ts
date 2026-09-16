@@ -6,7 +6,8 @@
 // the listening servers; never exits.
 import pg from 'pg';
 import http from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, createReadStream, mkdirSync, existsSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
 import { dirname, join, resolve as resolvePath } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import argon2 from '@node-rs/argon2';
@@ -31,18 +32,16 @@ async function migrate() {
   await c.connect();
   try {
     await c.query(`create table if not exists schema_migrations (filename text primary key, applied_at timestamptz not null default now())`);
-    const sql = readFileSync(join(REPO_ROOT, 'db/migrations/0001_init.sql'), 'utf8');
     const { rows } = await c.query('select filename from schema_migrations');
-    if (!rows.find((r) => r.filename === '0001_init.sql')) {
+    const applied = new Set(rows.map((r: { filename: string }) => r.filename));
+    const { readdirSync } = await import('node:fs');
+    const files = readdirSync(join(REPO_ROOT, 'db/migrations')).filter((f) => f.endsWith('.sql')).sort();
+    for (const f of files) {
+      if (applied.has(f)) continue;
+      const sql = readFileSync(join(REPO_ROOT, 'db/migrations', f), 'utf8');
       await c.query('BEGIN');
-      try {
-        await c.query(sql);
-        await c.query("insert into schema_migrations (filename) values ('0001_init.sql')");
-        await c.query('COMMIT');
-      } catch (e) {
-        await c.query('ROLLBACK');
-        throw e;
-      }
+      try { await c.query(sql); await c.query(`insert into schema_migrations (filename) values ($1)`, [f]); await c.query('COMMIT'); }
+      catch (e) { await c.query('ROLLBACK'); throw e; }
     }
   } finally {
     await c.end();
@@ -53,7 +52,7 @@ async function seed() {
   const c = new pg.Client({ connectionString: process.env.DATABASE_URL });
   await c.connect();
   try {
-    for (const t of ['audit_events', 'telestrations', 'media_jobs', 'play_angles', 'plays',
+    for (const t of ['events', 'audit_events', 'telestrations', 'media_jobs', 'play_angles', 'plays',
       'game_sources', 'source_status_snapshots', 'sources', 'mediamtx_server_settings', 'games',
       'team_members', 'teams', 'users']) {
       await c.query(`truncate table ${t} cascade`);
@@ -72,22 +71,75 @@ async function seed() {
 }
 
 function startMockMediamtx() {
-  // Mock Control API: drone → ready (ok); press-box → 404 (no_publisher).
+  // Mock Control API + recording HTTP endpoint:
+  //   /v3/paths/get/drone → ready (ok); /v3/paths/get/press-box → 404.
+  //   /recordings/list?path=... → one segment for any *drone* path; 404 for
+  //     press-box (no recording).
+  //   /seg.mp4 → a generated 2s H.264 segment the worker remuxes.
   const srv = http.createServer((req, res) => {
-    if (req.url === '/v3/paths/get/drone') {
+    const u = new URL(req.url || '/', `http://127.0.0.1:${MOCK_PORT}`);
+    if (u.pathname.startsWith('/v3/paths/get/') && u.pathname.includes('drone')) {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ ready: true, source: { id: 'drone' } }));
-    } else if (req.url === '/v3/paths/get/press-box') {
+    } else if (u.pathname.startsWith('/v3/paths/get/')) {
       res.writeHead(404, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: 'path not found' }));
+    } else if (u.pathname === '/recordings/list') {
+      const path = u.searchParams.get('path') || '';
+      if (path.includes('drone')) {
+        const from = new Date(u.searchParams.get('from') || Date.now() - 60000).getTime();
+        const to = new Date(u.searchParams.get('to') || Date.now()).getTime();
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ segments: [{
+          url: `http://127.0.0.1:${MOCK_PORT}/seg.mp4`,
+          startIso: new Date(from - 1000).toISOString(),
+          endIso: new Date(to + 1000).toISOString(),
+        }] }));
+      } else {
+        res.writeHead(404); res.end();
+      }
+    } else if (u.pathname === '/seg.mp4') {
+      res.writeHead(200, { 'content-type': 'application/octet-stream' });
+      createReadStream(join(REPO_ROOT, 'test-results', 'e2e-seg.mp4')).pipe(res);
     } else {
-      res.writeHead(404);
-      res.end();
+      res.writeHead(404); res.end();
     }
   });
   srv.listen(MOCK_PORT, '127.0.0.1', () =>
     console.log('[e2e-setup] mock MediaMTX on :' + MOCK_PORT)
   );
+}
+
+function makeSegment() {
+  // Generate a 2s H.264 segment once (synchronously) for the mock to serve.
+  const dir = join(REPO_ROOT, 'test-results');
+  mkdirSync(dir, { recursive: true });
+  const seg = join(dir, 'e2e-seg.mp4');
+  if (existsSync(seg)) return;
+  const args = ['-y', '-hide_banner', '-loglevel', 'error',
+    '-f', 'lavfi', '-i', 'testsrc=duration=2:size=320x240:rate=10',
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', seg];
+  const r = spawnSync('ffmpeg', args, { stdio: 'ignore' });
+  if (r.status !== 0) console.error('[e2e-setup] ffmpeg segment failed exit', r.status);
+}
+
+function startWorker() {
+  // Run the media worker against the mock MediaMTX so marked plays become
+  // ready during the E2E run. Writes angles to a temp media dir.
+  const mediaDir = join(REPO_ROOT, 'test-results', 'media');
+  mkdirSync(mediaDir, { recursive: true });
+  const env = {
+    ...process.env,
+    DATABASE_URL: process.env.DATABASE_URL,
+    SSRF_ALLOW_HOSTS: '127.0.0.1',
+    MEDIAMTX_RECORDING_HTTP_BASE: `http://127.0.0.1:${MOCK_PORT}`,
+    MEDIA_OUTPUT_DIR: mediaDir,
+    RECORDING_SETTLE_MS: '0',
+    WORKER_POLL_MS: '500',
+    LOG_LEVEL: 'warn',
+  };
+  const w = spawn('npx', ['tsx', 'src/index.ts'], { cwd: join(REPO_ROOT, 'worker'), env, stdio: 'ignore' });
+  w.on('exit', (c) => console.error('[e2e-setup] worker exited', c));
 }
 
 async function startApi() {
@@ -106,7 +158,9 @@ async function startApi() {
 async function main() {
   await migrate();
   await seed();
+  makeSegment();
   startMockMediamtx();
+  startWorker();
   await startApi();
   // Never resolve — the webServer keeps this process alive.
   await new Promise(() => {});
