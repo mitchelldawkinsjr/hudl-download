@@ -58,6 +58,35 @@ test('media: cross-team operator cannot read another team clip', async () => {
   } finally { await ctx.close(); }
 });
 
+test('media: signed token grants cookieless access scoped to clip', async () => {
+  const ctx = await setupTest();
+  try {
+    const { playId, angleId } = await seedAngle(ctx);
+    // Mint a token (requires session + team).
+    const s = await ctx.authed('admin')(`${ctx.baseUrl}/api/v1/plays/${playId}/angles/${angleId}/sign?kind=clip&ttl=300`, {
+      method: 'POST',
+    });
+    assert.equal(s.status, 200);
+    const { token } = (await s.json()).data;
+    assert.ok(token);
+
+    // Cookieless request with the token → 200.
+    const r = await fetch(`${ctx.baseUrl}/api/v1/plays/${playId}/angles/${angleId}/clip?token=${encodeURIComponent(token)}`);
+    assert.equal(r.status, 200);
+    assert.equal(r.headers.get('content-type'), 'video/mp4');
+
+    // A thumbnail-kind token must NOT authorize the clip (scope mismatch).
+    const st = await ctx.authed('admin')(`${ctx.baseUrl}/api/v1/plays/${playId}/angles/${angleId}/sign?kind=thumbnail&ttl=300`, { method: 'POST' });
+    const thumbToken = (await st.json()).data.token;
+    const r2 = await fetch(`${ctx.baseUrl}/api/v1/plays/${playId}/angles/${angleId}/clip?token=${encodeURIComponent(thumbToken)}`);
+    assert.equal(r2.status, 401);
+
+    // A token scoped to a different play must not authorize this clip.
+    const r3 = await fetch(`${ctx.baseUrl}/api/v1/plays/${playId}/angles/${angleId}/clip?token=bogus.9999.9999.clip.deadbeef`);
+    assert.equal(r3.status, 401);
+  } finally { await ctx.close(); }
+});
+
 test('telestrations: create, list, patch (optimistic), delete', async () => {
   const ctx = await setupTest();
   try {

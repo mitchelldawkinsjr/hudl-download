@@ -1,7 +1,10 @@
 # Worker image. Needs ffmpeg/ffprobe for the clip pipeline. Build context is
 # the repo root (../ from infra/).
+# Phase 7 hardening: non-root user, dumb-init for signal handling, healthcheck
+# (worker heartbeat row age via the API readiness endpoint is the source of
+# truth; the container healthcheck just confirms the process is alive).
 FROM node:20-bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates dumb-init \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY worker/package.json worker/package-lock.json* ./worker/
@@ -10,8 +13,14 @@ RUN npm ci --omit=dev --no-audit --no-fund || npm install --omit=dev --no-audit 
 WORKDIR /app
 COPY worker ./worker
 COPY db ./db
+# Non-root user; ensure the media volume is writable by it.
+RUN mkdir -p /media && chown -R node:node /app /media
+USER node
 WORKDIR /app/worker
 ENV NODE_ENV=production
 # /media holds validated angles + thumbnails (mount a volume in compose).
 VOLUME ["/media"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "const fs=require('fs');fs.existsSync('/proc/1')?process.exit(0):process.exit(1)"
+ENTRYPOINT ["dumb-init","--"]
 CMD ["npx", "tsx", "src/index.ts"]

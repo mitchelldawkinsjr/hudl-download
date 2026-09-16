@@ -8,8 +8,13 @@ import { query } from '../db/client.js';
 import { audit } from '../services/audit.js';
 import { asyncHandler, badRequest, unauthorized } from '../middleware/error.js';
 import { getSessionData } from '../middleware/session.js';
+import { rateLimit } from '../middleware/rate-limit.js';
 
 export const authRouter = Router();
+
+// Login brute-force protection: 10 attempts per minute per IP. Applied before
+// body parsing so a flood is rejected cheaply.
+const loginLimiter = rateLimit({ windowMs: 60_000, max: 10, scope: 'login' });
 
 const loginSchema = z.object({
   email: z.string().email().max(254).toLowerCase(),
@@ -18,6 +23,7 @@ const loginSchema = z.object({
 
 authRouter.post(
   '/login',
+  loginLimiter,
   asyncHandler(async (req, res) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {

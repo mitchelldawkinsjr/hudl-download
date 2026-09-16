@@ -67,3 +67,27 @@ test('auth: logout then /me is 401', async () => {
     await ctx.close();
   }
 });
+
+test('auth: login is rate-limited after the per-IP threshold', async () => {
+  const ctx = await setupTest();
+  try {
+    const csrf = () =>
+      fetch(`${ctx.baseUrl}/api/v1/health/live`)
+        .then((r0) => (r0.headers.getSetCookie?.() || []).join('; ').match(/csrf=([^;]+)/)?.[1] || '');
+    let last = 0;
+    // The limiter allows 10/min; send 12 bad logins and expect the tail to be
+    // 429. Each request needs a fresh CSRF cookie (CSRF is per-cookie).
+    for (let i = 0; i < 12; i++) {
+      const token = await csrf();
+      const r = await fetch(`${ctx.baseUrl}/api/v1/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-csrf-token': token, cookie: `csrf=${token}` },
+        body: JSON.stringify({ email: 'admin@test.test', password: 'wrong' }),
+      });
+      last = r.status;
+    }
+    assert.equal(last, 429, 'the 12th login should be rate-limited');
+  } finally {
+    await ctx.close();
+  }
+});

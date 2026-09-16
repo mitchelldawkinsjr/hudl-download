@@ -8,8 +8,13 @@ import { query, withTransaction } from '../db/client.js';
 import { audit } from '../services/audit.js';
 import { asyncHandler, badRequest, notFound, conflict, requireUuid } from '../middleware/error.js';
 import { requireAuth, requireRole, requireTeam, type AuthedRequest } from '../middleware/auth.js';
+import { rateLimit } from '../middleware/rate-limit.js';
 
 export const playsRouter = Router();
+
+// Mark Play / retry abuse protection: 60 writes/min per IP. Prevents a runaway
+// client or a bad loop from flooding the job queue.
+const writeLimiter = rateLimit({ windowMs: 60_000, max: 60, scope: 'plays.write' });
 
 const markSchema = z.object({
   quarter: z.number().int().min(0).max(10).nullable().optional(),
@@ -48,6 +53,7 @@ playsRouter.post(
   '/games/:gameId/plays',
   requireAuth,
   requireRole('admin', 'operator'),
+  writeLimiter,
   requireTeam(async (req) => {
     requireUuid(req.params.gameId, 'game'); const { rows } = await query('select team_id from games where id = $1', [req.params.gameId], { tag: 'games.getTeam' });
     return rows[0]?.team_id ?? null;
@@ -298,6 +304,7 @@ playsRouter.post(
   '/plays/:id/retry',
   requireAuth,
   requireRole('admin', 'operator'),
+  writeLimiter,
   requireTeam(async (req) => {
     requireUuid(req.params.id, 'play'); const { rows } = await query('select team_id from plays p join games g on g.id = p.game_id where p.id = $1', [req.params.id], { tag: 'plays.getTeam' });
     return rows[0]?.team_id ?? null;

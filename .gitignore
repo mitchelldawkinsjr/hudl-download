@@ -21,4 +21,10 @@ Start_WR*/
 
 # personal VPS/deployment tooling (IPs, email, internal hostnames) --
 # not relevant to other users of this repo, never commit
-scripts/
+scripts/*
+# ...except the tracked retention cleanup tool.
+!scripts/retention-cleanup.ts
+
+# generated media (worker output + test artifacts) -- never commit footage
+server/data/
+/data/

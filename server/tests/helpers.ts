@@ -5,6 +5,7 @@
 // CSRF token). Uses Node's built-in test runner.
 import pg from 'pg';
 import { createApp } from '../src/app.js';
+import { __resetRateLimit } from '../src/middleware/rate-limit.js';
 
 const DATABASE_URL =
   process.env.TEST_DATABASE_URL || 'postgres://mitchelldawkins@localhost:5432/filmroom_test';
@@ -23,7 +24,7 @@ export interface TestContext {
 }
 
 const TABLES = [
-  'events', 'audit_events', 'telestrations', 'media_jobs', 'play_angles', 'plays',
+  'events', 'audit_events', 'worker_heartbeats', 'retention_settings', 'telestrations', 'media_jobs', 'play_angles', 'plays',
   'game_sources', 'source_status_snapshots', 'sources', 'mediamtx_server_settings', 'games',
   'team_members', 'teams', 'users',
 ];
@@ -41,6 +42,9 @@ export async function setupTest(): Promise<TestContext> {
   // Clean slate.
   for (const t of TABLES) await pool.query(`truncate table ${t} cascade`);
   await pool.end();
+  // Reset the in-memory rate limiter so cross-file login bursts in one process
+  // don't trip the per-IP login bucket.
+  __resetRateLimit();
 
   // Seed users + teams + memberships directly.
   const seedPool = new pg.Pool({ connectionString: DATABASE_URL });

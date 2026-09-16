@@ -7,7 +7,9 @@
   "scripts": {
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "fixtures": "./tools/make-sync-fixtures.sh"
+    "fixtures": "./tools/make-sync-fixtures.sh",
+    "retention:dry-run": "node --import tsx scripts/retention-cleanup.ts",
+    "retention:apply": "node --import tsx scripts/retention-cleanup.ts --apply"
   },
   "devDependencies": {
     "@playwright/test": "^1.47.0"

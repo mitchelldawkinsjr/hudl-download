@@ -1,15 +1,23 @@
 # API image. Build context is the repo root (../ from infra/).
+# Phase 7 hardening: non-root user, dumb-init for signal handling, healthcheck.
 FROM node:20-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends dumb-init ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-# Install only the server's deps. The repo root has its own package.json for
-# E2E tooling; we install the server package specifically.
+# Install only the server's deps.
 COPY server/package.json server/package-lock.json* ./server/
 WORKDIR /app/server
 RUN npm ci --omit=dev --no-audit --no-fund || npm install --omit=dev --no-audit --no-fund
 WORKDIR /app
 COPY server ./server
 COPY db ./db
+# Non-root user. node image ships uid 1000 'node'.
+RUN chown -R node:node /app
+USER node
 WORKDIR /app/server
 ENV NODE_ENV=production
 EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:8080/api/v1/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+ENTRYPOINT ["dumb-init","--"]
 CMD ["npx", "tsx", "src/index.ts"]

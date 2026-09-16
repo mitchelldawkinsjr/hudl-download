@@ -4,6 +4,7 @@
 import { Router } from 'express';
 import { withTransaction } from '../db/client.js';
 import { asyncHandler } from '../middleware/error.js';
+import { __resetRateLimit } from '../middleware/rate-limit.js';
 import argon2 from '@node-rs/argon2';
 
 export const testResetRouter = Router();
@@ -12,7 +13,7 @@ testResetRouter.post(
   '/_test/reset',
   asyncHandler(async (_req, res) => {
     await withTransaction(async (c) => {
-      for (const t of ['events', 'audit_events', 'telestrations', 'media_jobs', 'play_angles', 'plays',
+      for (const t of ['events', 'audit_events', 'worker_heartbeats', 'retention_settings', 'telestrations', 'media_jobs', 'play_angles', 'plays',
         'game_sources', 'source_status_snapshots', 'sources', 'mediamtx_server_settings', 'games',
         'team_members', 'teams', 'users']) {
         await c.query(`truncate table ${t} cascade`);
@@ -25,6 +26,7 @@ testResetRouter.post(
       const tm = await c.query(`insert into teams (name, slug) values ('Home Team','home') returning id`);
       await c.query('insert into team_members (user_id, team_id) values ($1,$2)', [u.rows[0].id, tm.rows[0].id]);
     });
+    __resetRateLimit();
     res.json({ data: { ok: true } });
   })
 );

@@ -385,6 +385,12 @@ ffmpeg -f lavfi -i "testsrc=duration=10:size=960x540:rate=30" \
 
 ## Roadmap
 
+- **Live multi-angle system** (Phases 0–7) — a live football video platform on
+  top of an external MediaMTX instance: admin-configurable sources, a live
+  operator screen, an FFmpeg worker, synchronized multi-angle review, and
+  hardening. See [docs/live-system.md](docs/live-system.md) for setup,
+  architecture, publishing, game-day, retention/backup, rollback, and the
+  field-test runbook. Offline local-film review is unaffected.
 - Wire `shared/hudl-import.js` into the player UI (an "Import Hudl Export…"
   button, a play list with per-play camera-angle switching, and replaying
   Hudl's own embedded coach telestrations alongside your own notes).

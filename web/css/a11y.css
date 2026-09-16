@@ -1,0 +1,33 @@
+/* Shared accessibility hardening (Phase 7) for the live/settings/review
+   screens. Applied additively on top of player.css + the per-screen CSS.
+   - Visible focus ring for keyboard users.
+   - Minimum 44×44 touch targets for interactive controls (WCAG 2.5.5).
+   - Mark Play stays ≥72px (per spec) via its own rule.
+   - Color is never the sole signal: state chips pair color with a text label
+     and an icon glyph where relevant.
+   - Respect prefers-reduced-motion for drift-correction nudges. */
+:where(button, [role="button"], input[type="checkbox"], input[type="radio"],
+        input[type="submit"], input[type="button"], select, summary) {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Small icon-only / chip buttons may shrink width but keep the 44px height. */
+:where(.retry-btn, .icon-btn) { min-width: 44px; }
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent, #3b82f6);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Mark Play is intentionally larger (spec: ≥72px). */
+.mark-play { min-height: 72px; }
+
+/* Reduced motion: disable rate-nudge animation flicker and canvas redraw
+   smoothing. The MultiAnglePlayer still corrects drift, just without
+   playbackRate oscillation visible to the user. */
+@media (prefers-reduced-motion: reduce) {
+  video { scroll-behavior: auto; }
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

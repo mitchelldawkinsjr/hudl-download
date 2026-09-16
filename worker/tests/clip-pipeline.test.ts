@@ -56,18 +56,21 @@ async function migrate() {
   await c.connect();
   try {
     await c.query(`create table if not exists schema_migrations (filename text primary key, applied_at timestamptz not null default now())`);
-    const sql = readFileSync(join(REPO_ROOT, 'db/migrations/0001_init.sql'), 'utf8');
     const { rows } = await c.query('select filename from schema_migrations');
-    if (!rows.find((r: { filename: string }) => r.filename === '0001_init.sql')) {
+    const applied = new Set(rows.map((r: { filename: string }) => r.filename));
+    const files = ['0001_init.sql', '0002_events.sql', '0003_worker_heartbeats.sql', '0004_retention.sql'];
+    for (const f of files) {
+      if (applied.has(f)) continue;
+      const sql = readFileSync(join(REPO_ROOT, 'db/migrations', f), 'utf8');
       await c.query('BEGIN');
-      try { await c.query(sql); await c.query("insert into schema_migrations (filename) values ('0001_init.sql')"); await c.query('COMMIT'); }
+      try { await c.query(sql); await c.query(`insert into schema_migrations (filename) values ('${f}')`); await c.query('COMMIT'); }
       catch (e) { await c.query('ROLLBACK'); throw e; }
     }
   } finally { await c.end(); }
 }
 
 async function resetDb() {
-  for (const t of ['events', 'audit_events', 'telestrations', 'media_jobs', 'play_angles', 'plays',
+  for (const t of ['events', 'audit_events', 'worker_heartbeats', 'retention_settings', 'telestrations', 'media_jobs', 'play_angles', 'plays',
     'game_sources', 'source_status_snapshots', 'sources', 'mediamtx_server_settings', 'games',
     'team_members', 'teams', 'users']) {
     await query(`truncate table ${t} cascade`);
@@ -279,4 +282,19 @@ test('permanent failure (bad segment) → job dead + angle failed after exhausti
     assert.equal(a.rows[0].status, 'failed');
     assert.equal(a.rows[0].error_code, 'permanent');
   } finally { await stopStub(); }
+});
+
+test('heartbeat: upserts a row per worker, reflecting status', async () => {
+  await resetDb();
+  const { heartbeat } = await import('../src/heartbeat.js');
+  await heartbeat({ workerId: 'w1', status: 'idle' });
+  let r = await query('select status from worker_heartbeats where worker_id = $1', ['w1']);
+  assert.equal(r.rows[0].status, 'idle');
+  await heartbeat({ workerId: 'w1', status: 'processing', lastJobId: '11111111-1111-1111-1111-111111111111' });
+  r = await query('select status, last_job_id from worker_heartbeats where worker_id = $1', ['w1']);
+  assert.equal(r.rows[0].status, 'processing');
+  assert.equal(r.rows[0].last_job_id, '11111111-1111-1111-1111-111111111111');
+  // Still a single row (upsert, not insert).
+  r = await query('select count(*)::int as n from worker_heartbeats where worker_id = $1', ['w1']);
+  assert.equal(r.rows[0].n, 1);
 });
