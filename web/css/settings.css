@@ -1,0 +1,75 @@
+/* Film Room Settings — Video Sources screen. Reuses tokens from player.css
+   (vars like --bg, --panel, --text, --text-dim, --accent, --danger). */
+
+/* The [hidden] attribute must win over any explicit display (e.g. the
+   preview placeholder's display:grid) so .hidden = true actually hides. */
+[hidden] { display: none !important; }
+
+.settings-app { max-width: 980px; margin: 0 auto; padding: 16px; }
+.settings-header { display: flex; align-items: center; gap: 12px; padding: 8px 4px 16px; }
+.settings-header h1 { font-size: 20px; margin: 0; }
+.settings-nav { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.settings-nav .spacer { flex: 1; }
+.whoami { font-size: 12px; color: var(--text-dim); }
+
+.login-gate { display: flex; justify-content: center; padding: 40px 16px; }
+.login-form { background: var(--panel); border-radius: 12px; padding: 24px; max-width: 380px; width: 100%; box-shadow: 0 2px 18px rgba(0,0,0,.25); }
+.login-form h2 { margin: 0 0 6px; }
+.login-form .muted { margin: 0 0 18px; }
+
+.settings-main { display: flex; flex-direction: column; gap: 18px; }
+
+.card { background: var(--panel); border-radius: 12px; padding: 18px 18px 22px; box-shadow: 0 1px 10px rgba(0,0,0,.2); }
+.card h2 { margin: 0 0 4px; font-size: 17px; }
+.card h4 { margin: 18px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); }
+.muted { color: var(--text-dim); font-size: 12px; margin: 0 0 14px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-dim); }
+.field input, .field select { background: var(--bg); color: var(--text); border: 1px solid #2a2d33; border-radius: 8px; padding: 9px 10px; font-size: 14px; }
+.field input[readonly] { opacity: .85; }
+
+.actions { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.status { font-size: 12px; color: var(--text-dim); }
+.status.ok { color: var(--accent); }
+.status.err { color: var(--danger); }
+
+.error { color: var(--danger); font-size: 12px; margin-top: 8px; }
+
+.source-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; }
+.source-form .actions { grid-column: 1 / -1; }
+
+.source-list, .assign-list { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.source-item, .assign-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg); border-radius: 10px; border: 1px solid #23262b; }
+.source-item .name { font-weight: 600; }
+.source-item .path { font-size: 12px; color: var(--text-dim); font-family: ui-monospace, monospace; }
+.source-item .spacer, .assign-item .spacer { flex: 1; }
+.source-item .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #23262b; color: var(--text-dim); }
+.source-item .badge.inactive { background: #3a2a2a; color: #ffb4a8; }
+.assign-item .order-handle { cursor: grab; color: var(--text-dim); }
+
+/* Source dialog */
+.source-dialog { max-width: 640px; width: calc(100% - 32px); border-radius: 14px; border: 1px solid #2a2d33; background: var(--panel); color: var(--text); padding: 20px; }
+.source-dialog::backdrop { background: rgba(0,0,0,.55); }
+.source-dialog form { margin: 0; }
+.test-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.test-status { font-size: 13px; font-weight: 600; }
+.test-status[data-state="ok"] { color: var(--accent); }
+.test-status[data-state="server_unreachable"] { color: var(--danger); }
+.test-status[data-state="no_publisher"] { color: #ffcc00; }
+.test-status[data-state="auth_failed"] { color: #ff9f40; }
+.test-status[data-state="playback_failed"] { color: var(--danger); }
+
+.preview-wrap { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16/9; }
+.preview-wrap video { width: 100%; height: 100%; display: block; }
+.preview-placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-dim); font-size: 13px; text-align: center; padding: 16px; }
+
+.publish-grid { display: grid; gap: 10px; }
+.publish-grid .field { flex-direction: row; align-items: center; gap: 8px; }
+.publish-grid .field input { flex: 1; }
+.btn.tiny { padding: 6px 10px; font-size: 12px; }
+
+@media (max-width: 900px) {
+  .settings-app { padding: 10px; }
+  .settings-header { flex-wrap: wrap; }
+}

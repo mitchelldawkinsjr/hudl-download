@@ -221,7 +221,7 @@ async function buildClipName(tabId, streamSnapshot) {
     if (streams.length >= 1) {
       downloadAllBtn.style.display = 'block';
       if (!restoredDownloadAllState || (!restoredDownloadAllState.running && !restoredDownloadAllState.finished)) {
-        downloadAllBtn.textContent = `Download All (${streams.length})`;
+        downloadAllBtn.textContent = 'Download All';
       }
     }
   }

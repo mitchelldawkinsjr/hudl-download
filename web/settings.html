@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Film Room — Settings · Video Sources</title>
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" />
+<meta name="theme-color" content="#14161a" />
+<link rel="stylesheet" href="../shared/player.css" />
+<link rel="stylesheet" href="css/settings.css" />
+</head>
+<body>
+<div class="settings-app">
+  <header class="settings-header">
+    <h1>Film Room — Settings</h1>
+    <nav class="settings-nav">
+      <a href="index.html" class="btn small">← Back to Film Room</a>
+      <span class="spacer"></span>
+      <span id="whoami" class="whoami" hidden></span>
+      <button class="btn small" id="logoutBtn" hidden>Log out</button>
+    </nav>
+  </header>
+
+  <!-- Login gate: shown until authenticated -->
+  <section class="login-gate" id="loginGate">
+    <form id="loginForm" class="login-form">
+      <h2>Sign in</h2>
+      <p class="muted">Admin or operator access is required to configure video sources.</p>
+      <label class="field">Email
+        <input type="email" id="loginEmail" autocomplete="username" required />
+      </label>
+      <label class="field">Password
+        <input type="password" id="loginPassword" autocomplete="current-password" required />
+      </label>
+      <button class="btn primary" type="submit">Sign in</button>
+      <div class="error" id="loginError" hidden></div>
+    </form>
+  </section>
+
+  <!-- Admin UI: hidden until /me returns a role -->
+  <main class="settings-main" id="settingsMain" hidden>
+    <!-- (a) MediaMTX Server -->
+    <section class="card" id="serverCard">
+      <h2>MediaMTX Server</h2>
+      <p class="muted">Connect to the external MediaMTX instance. Private addresses stay server-side; only the public playback base is sent to browsers.</p>
+      <div class="grid">
+        <label class="field">Public playback base (browser-facing)
+          <input type="url" id="publicPlaybackBase" placeholder="https://play.example.com" />
+        </label>
+        <label class="field">Private API base (server → Control API)
+          <input type="url" id="privateApiBase" placeholder="http://mediamtx.local:9997" />
+        </label>
+        <label class="field">Private playback base (server → recording HTTP)
+          <input type="url" id="privatePlaybackBase" placeholder="http://mediamtx.local:9996" />
+        </label>
+        <label class="field">WebRTC public base
+          <input type="url" id="webrtcPublicBase" placeholder="https://webrtc.example.com" />
+        </label>
+        <label class="field">HLS public base
+          <input type="url" id="hlsPublicBase" placeholder="https://hls.example.com" />
+        </label>
+        <label class="field">RTMP host
+          <input type="text" id="rtmpHost" placeholder="mediamtx.local" />
+        </label>
+        <label class="field">RTMP port
+          <input type="number" id="rtmpPort" min="1" max="65535" value="1935" />
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="saveServerBtn">Save server settings</button>
+        <span class="status" id="serverStatus"></span>
+      </div>
+    </section>
+
+    <!-- (b) Camera Sources -->
+    <section class="card" id="sourcesCard">
+      <h2>Camera Sources</h2>
+      <p class="muted">Add each camera (e.g. Drone, Press Box). The MediaMTX stream path must be lowercase, start/end alphanumeric, hyphens allowed.</p>
+      <form id="sourceForm" class="source-form">
+        <input type="hidden" id="sourceId" />
+        <label class="field">Display name
+          <input type="text" id="displayName" maxlength="80" placeholder="Drone" required />
+        </label>
+        <label class="field">Key (label)
+          <input type="text" id="sourceKey" maxlength="40" pattern="[a-z0-9-]+" placeholder="drone" required />
+        </label>
+        <label class="field">MediaMTX stream path
+          <input type="text" id="mediamtxPath" maxlength="80" pattern="[a-z0-9][a-z0-9-]*[a-z0-9]" placeholder="drone" required />
+        </label>
+        <label class="field">Preview protocol
+          <select id="previewProtocol">
+            <option value="hls">HLS</option>
+            <option value="webrtc">WebRTC</option>
+          </select>
+        </label>
+        <label class="field">Playback URL override (advanced)
+          <input type="url" id="playbackUrlOverride" placeholder="(auto-generated if blank)" />
+        </label>
+        <label class="field">Sort order
+          <input type="number" id="sourceSortOrder" min="0" value="0" />
+        </label>
+        <div class="actions">
+          <button class="btn primary" type="submit" id="sourceSubmitBtn">Add source</button>
+          <button class="btn" type="button" id="sourceCancelBtn" hidden>Cancel edit</button>
+        </div>
+      </form>
+      <div class="error" id="sourceFormError" hidden></div>
+      <ul class="source-list" id="sourceList"></ul>
+    </section>
+
+    <!-- (c) Game Assignment & Order -->
+    <section class="card" id="assignmentCard">
+      <h2>Game Assignment &amp; Order</h2>
+      <p class="muted">Assign saved sources to a game and set their display order. A game needs at least one source to start.</p>
+      <div class="grid">
+        <label class="field">Game
+          <select id="assignGameSelect"><option value="">Loading games…</option></select>
+        </label>
+      </div>
+      <ul class="assign-list" id="assignList"></ul>
+      <div class="actions">
+        <button class="btn primary" id="saveAssignmentBtn">Save assignment</button>
+        <span class="status" id="assignStatus"></span>
+      </div>
+    </section>
+  </main>
+
+  <!-- Source detail modal (publishing + test + preview) -->
+  <dialog id="sourceDialog" class="source-dialog">
+    <form method="dialog">
+      <h3 id="sourceDialogTitle">Source</h3>
+
+      <h4>Connection test</h4>
+      <div class="test-row">
+        <button class="btn" id="testBtn" type="button">Test connection</button>
+        <span class="test-status" id="testStatus">Not tested yet</span>
+      </div>
+
+      <h4>Live preview</h4>
+      <div class="preview-wrap" id="previewWrap">
+        <video id="previewVideo" muted playsinline></video>
+        <div class="preview-placeholder" id="previewPlaceholder">Preview appears here after a successful test.</div>
+      </div>
+
+      <h4>Publishing settings</h4>
+      <div class="publish-grid">
+        <label class="field">Server URL
+          <input type="text" id="pubServerUrl" readonly />
+          <button class="btn tiny" type="button" data-copy="pubServerUrl">Copy</button>
+        </label>
+        <label class="field">Stream key
+          <input type="text" id="pubStreamKey" readonly />
+          <button class="btn tiny" type="button" data-copy="pubStreamKey">Reveal / copy</button>
+        </label>
+        <label class="field">Combined URL
+          <input type="text" id="pubCombinedUrl" readonly />
+          <button class="btn tiny" type="button" data-copy="pubCombinedUrl">Copy</button>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="btn" type="submit">Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="js/api-client.js"></script>
+  <script src="js/sources-controller.js" defer></script>
+</body>
+</html>

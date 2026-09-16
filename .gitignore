@@ -3,6 +3,11 @@ node_modules/
 dist/
 *.log
 
+# Playwright test output (run with: npm run test:e2e)
+test-results/
+playwright-report/
+playwright/.cache/
+
 # OS junk
 .DS_Store
 

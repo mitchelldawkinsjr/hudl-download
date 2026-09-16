@@ -1,0 +1,33 @@
+# MediaMTX reference configuration — CONTRACT EXAMPLE, not a file Film Room
+# manages (ADR 0005). The external MediaMTX host must match the path
+# convention + recording settings below. Adapt to your installed version
+# using https://mediamtx.org/docs/references/configuration-file.
+#
+# Path convention: /games/{gameUuid}/{source.mediamtx_path}
+# (e.g. /games/abc-.../drone, /games/abc-.../press-box)
+
+api: true
+apiAddress: :9997
+
+hls: true
+hlsAddress: :8888
+hlsAlwaysRemux: true
+
+webrtc: true
+webrtcAddress: :8889
+
+rtmp: true
+rtmpAddress: :1935
+
+pathDefaults:
+  record: true
+  recordFormat: fmp4
+  recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+  recordPartDuration: 1s
+  recordSegmentDuration: 10s
+  recordDeleteAfter: 72h
+
+paths:
+  all_others:
+    # Per-game paths are created via the Control API by the Film Room API, or
+    # pre-configured by the operator. Authorization is delegated to Film Room.

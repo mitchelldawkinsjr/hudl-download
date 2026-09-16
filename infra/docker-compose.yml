@@ -1,0 +1,53 @@
+# Production-style Docker Compose for Film Room: API, worker, PostgreSQL, and
+# an optional reverse proxy. MediaMTX is EXTERNAL (ADR 0005) and is NOT run
+# here. For local/CI testing with a throwaway MediaMTX, see
+# docker-compose.dev.yml.
+#
+# Usage:
+#   cp .env.example .env   # then edit
+#   docker compose -f infra/docker-compose.yml up -d db
+#   docker compose -f infra/docker-compose.yml run --rm api npm run migrate
+#   docker compose -f infra/docker-compose.yml up -d api worker
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: filmroom
+      POSTGRES_PASSWORD: filmroom
+      POSTGRES_DB: filmroom
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U filmroom -d filmroom"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    env_file: ../.env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    command: ["sh", "-c", "npm run migrate && npm start"]
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.worker
+    env_file: ../.env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db_data:

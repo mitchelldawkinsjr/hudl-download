@@ -96,8 +96,13 @@ chrome.webRequest.onBeforeRequest.addListener(
       // the real-time correlation, not a positional guess.
       const playSnapshot = snapshotForStream(details.tabId, Date.now());
       list.push({ url: details.url, type, time: Date.now(), playSnapshot });
-      chrome.action.setBadgeText({ tabId: details.tabId, text: String(list.length) });
-      chrome.action.setBadgeBackgroundColor({ tabId: details.tabId, color: '#ff6a1a' });
+      // Badge is a red dot, not a count: the count of detected stream URLs
+      // doesn't match the real clip count (Hudl prefetches, multiple angles
+      // per play, etc.), so a number was misleading. The dot just means
+      // "videos detected on this tab". The popup's "Download All (N)"
+      // button still shows a live count for those who want it.
+      chrome.action.setBadgeText({ tabId: details.tabId, text: '•' });
+      chrome.action.setBadgeBackgroundColor({ tabId: details.tabId, color: '#ff0000' });
       // Hudl keeps prefetching clips after the page first loads, so the
       // popup's own stream list/count (a one-time snapshot from whenever it
       // happened to open) can go stale within seconds -- it looked "wrong"
