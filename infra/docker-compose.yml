@@ -31,12 +31,18 @@ services:
       context: ..
       dockerfile: infra/Dockerfile.api
     env_file: ../.env
+    environment:
+      MEDIA_ROOT: /media
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "8080:8080"
-    command: ["sh", "-c", "npm run migrate && npm start"]
+    volumes:
+      - media_data:/media
+    # Run migrations (idempotent) then start the API via tsx. tsx is a
+    # runtime dependency so the production image (npm ci --omit=dev) has it.
+    command: ["sh", "-c", "npx tsx src/db/migrate.ts && npx tsx src/index.ts"]
     restart: unless-stopped
 
   worker:
@@ -44,6 +50,8 @@ services:
       context: ..
       dockerfile: infra/Dockerfile.worker
     env_file: ../.env
+    environment:
+      MEDIA_OUTPUT_DIR: /media
     depends_on:
       db:
         condition: service_healthy

@@ -6,18 +6,19 @@
 // blocks cross-site POSTs from being credentialed, but the double-submit token
 // is the spec's required CSRF defense for the chosen session implementation.
 import type { Request, Response, NextFunction } from 'express';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { forbidden } from './error.js';
 
 const COOKIE = 'csrf';
 const HEADER = 'x-csrf-token';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-function timingSafeEqual(a: string, b: string): boolean {
+function safeEqual(a: string, b: string): boolean {
+  // Constant-time compare via the stdlib. Length mismatch still returns
+  // early, which is fine here (the token is a random secret, not a secret
+  // whose length is sensitive).
   if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+  return timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
 }
 
 export function csrfToken(req: Request, res: Response, next: NextFunction) {
@@ -53,7 +54,7 @@ export function csrfProtect(req: Request, _res: Response, next: NextFunction) {
   if (
     typeof cookie !== 'string' ||
     typeof header !== 'string' ||
-    !timingSafeEqual(cookie, header)
+    !safeEqual(cookie, header)
   ) {
     next(forbidden('invalid csrf token'));
     return;

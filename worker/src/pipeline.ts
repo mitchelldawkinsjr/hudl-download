@@ -106,7 +106,7 @@ export async function processJob(job: JobRow, deps: PipelineDeps): Promise<void>
     const stillSettling = Date.now() < ctx.requestedEnd.getTime() + config.recordingSettleMs;
     if (stillSettling) throw new TransientError('no segments yet (still settling)');
     await markAngle(ctx.angleId, { status: 'missing', errorCode: 'no_recording', errorMessage: 'no recording segments found for the requested window' });
-    await emitAngleEvent(ctx.angleId, 'play.angle.updated', { angleId: ctx.angleId, status: 'missing', errorCode: 'no_recording' });
+    await emitAngleEvent(ctx.angleId, { angleId: ctx.angleId, status: 'missing', errorCode: 'no_recording' });
     await finishJob(job.id, 'succeeded', null);
     log.info({ jobId: job.id, angleId: ctx.angleId }, 'angle missing: no recording');
     return;
@@ -195,7 +195,7 @@ export async function processJob(job: JobRow, deps: PipelineDeps): Promise<void>
       actualStart: partial ? new Date(earliest) : ctx.requestedStart,
       actualEnd: new Date(latest),
     });
-    await emitAngleEvent(ctx.angleId, 'play.angle.updated', {
+    await emitAngleEvent(ctx.angleId, {
       angleId: ctx.angleId, status: 'ready', sourceKey: ctx.sourceKey,
       clipUri: `games/${ctx.gameId}/plays/${ctx.playId}/${ctx.sourceKey}.mp4`,
       durationMs: Math.round(probeRes.duration * 1000), partial,
@@ -267,7 +267,7 @@ export async function requeueOrDead(job: JobRow, err: unknown): Promise<boolean>
     // Mark the angle failed.
     if (job.play_angle_id) {
       await markAngle(job.play_angle_id, { status: 'failed', errorCode: code, errorMessage: msg });
-      await emitAngleEvent(job.play_angle_id, 'play.angle.updated', { angleId: job.play_angle_id, status: 'failed', errorCode: code, errorMessage: msg });
+      await emitAngleEvent(job.play_angle_id, { angleId: job.play_angle_id, status: 'failed', errorCode: code, errorMessage: msg });
     }
     log.error({ jobId: job.id, code, msg }, 'job dead');
     return false;

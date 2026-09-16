@@ -4,9 +4,11 @@
 // this table.
 import { query } from './db.js';
 
+// The only event type this worker emits today.
+const ANGLE_UPDATED = 'play.angle.updated';
+
 export async function emitAngleEvent(
   angleId: string,
-  type: 'play.angle.updated',
   payload: Record<string, unknown>
 ): Promise<void> {
   // Look up game/play for the angle (one round-trip) and insert the event.
@@ -21,7 +23,7 @@ export async function emitAngleEvent(
   await query(
     `insert into events (game_id, type, play_id, angle_id, payload_json)
      values ($1, $2, $3, $4, $5)`,
-    [rows[0].game_id, type, rows[0].play_id, angleId, JSON.stringify(payload)],
+    [rows[0].game_id, ANGLE_UPDATED, rows[0].play_id, angleId, JSON.stringify(payload)],
     'event.insert'
   );
 }

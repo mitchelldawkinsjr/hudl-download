@@ -71,21 +71,36 @@ async function main() {
       deletedAngles += angles.rowCount;
     }
 
-    // Audit pruning.
-    const auditParams: unknown[] = [DEFAULT_AUDIT_DAYS];
-    if (TEAM) auditParams.push(TEAM);
-    const audit = await client.query(
-      `delete from audit_events
-        where created_at < now() - ($1 || ' days')::interval
-          ${TEAM ? "and actor_id in (select user_id from team_members where team_id = $2)" : ''}
-        returning id`,
-      auditParams
-    );
+    // Audit pruning. Honors per-team audit_retention_days (NULL = keep
+    // forever, so prune nothing for that team). When no --team is given, uses
+    // the global default. In dry-run we COUNT eligible rows; in --apply we
+    // DELETE. audit_events has no team FK, so per-team scoping is approximated
+    // via actor membership.
+    let prunableAuditDays = DEFAULT_AUDIT_DAYS;
+    if (TEAM) {
+      const tr = await client.query('select audit_retention_days from retention_settings where team_id = $1', [TEAM]);
+      prunableAuditDays = tr.rows[0]?.audit_retention_days ?? null; // null = keep forever
+    }
+    let prunedAudit = 0;
+    if (prunableAuditDays !== null) {
+      const auditParams: unknown[] = [prunableAuditDays];
+      if (TEAM) auditParams.push(TEAM);
+      const auditSql = APPLY
+        ? `delete from audit_events
+            where created_at < now() - ($1 || ' days')::interval
+              ${TEAM ? "and actor_id in (select user_id from team_members where team_id = $2)" : ''}
+            returning id`
+        : `select count(*)::int as n from audit_events
+            where created_at < now() - ($1 || ' days')::interval
+              ${TEAM ? "and actor_id in (select user_id from team_members where team_id = $2)" : ''}`;
+      const audit = await client.query(auditSql, auditParams);
+      prunedAudit = APPLY ? audit.rowCount : (audit.rows[0]?.n ?? 0);
+    }
 
     const mode = APPLY ? 'applied' : 'dry-run';
     console.log(JSON.stringify({
       mode, eligiblePlays: eligible.rowCount, deletedAngles, deletedFiles,
-      prunedAudit: APPLY ? audit.rowCount : audit.rowCount,
+      prunedAudit,
     }));
   } finally {
     client.release();

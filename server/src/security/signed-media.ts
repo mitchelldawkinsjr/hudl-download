@@ -17,15 +17,10 @@ export interface SignedMedia {
   kind: 'clip' | 'thumbnail';
 }
 
-export function signMedia(opts: SignedMedia, ttlSec = 300): string {
+export function signMedia(playId: string, angleId: string, kind: 'clip' | 'thumbnail', ttlSec = 300): string {
   const exp = Math.floor(Date.now() / 1000) + ttlSec;
-  return signAt(exp, opts.playId, opts.angleId, opts.kind);
-}
-
-function signAt(exp: number, playId: string, angleId: string, kind: string): string {
   const payload = `${exp}.${playId}.${angleId}.${kind}`;
-  const mac = hmac(payload);
-  return `${payload}.${mac}`;
+  return `${payload}.${hmac(payload)}`;
 }
 
 function hmac(payload: string): string {

@@ -162,3 +162,56 @@ test('plays: cross-team operator cannot read another team play', async () => {
     await ctx.close();
   }
 });
+
+test('plays: cross-team operator cannot sync another team angle (403)', async () => {
+  const ctx = await setupTest();
+  try {
+    const g = await createGame(ctx, ctx.teamId);
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    const src = await pool.query(`insert into sources (team_id, key, display_name, mediamtx_path, preview_protocol, sort_order, active)
+      values ($1,'drone','Drone','drone','hls',0,true) returning id`, [ctx.teamId]);
+    await pool.query('insert into game_sources (game_id, source_id, sort_order) values ($1,$2,0)', [g.id, src.rows[0].id]);
+    await pool.end();
+    await ctx.authed('admin')(`${ctx.baseUrl}/api/v1/games/${g.id}/start`, { method: 'POST' });
+    const m = await ctx.authed('admin')(`${ctx.baseUrl}/api/v1/games/${g.id}/plays`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'idempotency-key': 'sync-iso-1' },
+      body: JSON.stringify({}),
+    });
+    const play = (await m.json()).data;
+    const angleId = play.angles[0].id;
+
+    // other-team operator → 403 (team check now enforced on sync).
+    const r = await ctx.authed('other')(`${ctx.baseUrl}/api/v1/play-angles/${angleId}/sync`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ syncOffsetMs: 100 }),
+    });
+    assert.equal(r.status, 403);
+
+    // admin (own team) → 200.
+    const ok = await ctx.authed('admin')(`${ctx.baseUrl}/api/v1/play-angles/${angleId}/sync`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ syncOffsetMs: 100 }),
+    });
+    assert.equal(ok.status, 200);
+    assert.equal((await ok.json()).data.syncOffsetMs, 100);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('plays: sync rejects a non-uuid angle id (404)', async () => {
+  const ctx = await setupTest();
+  try {
+    const r = await ctx.authed('admin')(`${ctx.baseUrl}/api/v1/play-angles/not-a-uuid/sync`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ syncOffsetMs: 0 }),
+    });
+    assert.equal(r.status, 404);
+  } finally {
+    await ctx.close();
+  }
+});

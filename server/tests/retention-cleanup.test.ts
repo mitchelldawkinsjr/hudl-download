@@ -103,13 +103,20 @@ test('retention: purges soft-deleted plays past the window; never live plays (AC
     writeFileSync(join(MEDIA_ROOT, clipReady), Buffer.from('READY'));
     assert.ok(existsSync(join(MEDIA_ROOT, clipDel)));
 
-    // Dry run first: nothing deleted.
+    // Seed an audit row older than the default 365-day window.
+    await client.query(
+      "insert into audit_events (action, entity_type, created_at) values ('test.purge','thing', now() - interval '400 days')"
+    );
+
+    // Dry run first: nothing deleted (including audit rows).
     await runScript([]);
     assert.ok(existsSync(join(MEDIA_ROOT, clipDel)), 'dry-run must not delete files');
     const stillThere = await client.query('select count(*)::int as n from plays where id = $1', [delPlay]);
     assert.equal(stillThere.rows[0].n, 1, 'dry-run must not delete rows');
+    const auditKept = await client.query('select count(*)::int as n from audit_events where action = $1', ['test.purge']);
+    assert.equal(auditKept.rows[0].n, 1, 'dry-run must not delete audit rows');
 
-    // Apply: deleted play purged, ready play untouched.
+    // Apply: deleted play purged, ready play untouched, old audit row pruned.
     await runScript(['--apply']);
     assert.ok(!existsSync(join(MEDIA_ROOT, clipDel)), 'deleted play clip removed');
     assert.ok(existsSync(join(MEDIA_ROOT, clipReady)), 'ready play clip retained (AC19)');
@@ -117,6 +124,8 @@ test('retention: purges soft-deleted plays past the window; never live plays (AC
     assert.equal(delGone.rows[0].n, 0, 'soft-deleted play row purged');
     const readyKept = await client.query('select count(*)::int as n from plays where id = $1', [readyPlay]);
     assert.equal(readyKept.rows[0].n, 1, 'ready play retained');
+    const auditGone = await client.query('select count(*)::int as n from audit_events where action = $1', ['test.purge']);
+    assert.equal(auditGone.rows[0].n, 0, 'old audit row pruned on --apply');
   } finally {
     client.release();
     await pool.end();

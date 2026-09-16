@@ -14,11 +14,9 @@ function str(name: string, def: string): string {
 }
 
 export const config = {
-  databaseUrl: str('DATABASE_URL', 'postgres://mitchelldawkins@localhost:5432/filmroom'),
   workerId: str('WORKER_ID', `w-${process.pid}`),
   pollMs: num('WORKER_POLL_MS', 1000),
   leaseMs: num('JOB_LEASE_MS', 60_000),
-  maxAttempts: num('MAX_JOB_ATTEMPTS', 3),
   recordingSettleMs: num('RECORDING_SETTLE_MS', 2000),
   // External MediaMTX recording index/serve base (HTTP). The adapter queries
   // {base}/recordings/list?path=...&from=...&to=... and fetches segment URLs.

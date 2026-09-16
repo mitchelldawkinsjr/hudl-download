@@ -107,7 +107,7 @@ mediaRouter.post('/plays/:id/angles/:angleId/sign', requireAuth, requireTeam(asy
 }), asyncHandler(async (req, res) => {
   const kind = (req.query.kind === 'thumbnail' ? 'thumbnail' : 'clip') as 'clip' | 'thumbnail';
   const ttl = Math.min(Math.max(Number(req.query.ttl) || 300, 60), 86400);
-  const token = signMedia({ exp: 0, playId: req.params.id, angleId: req.params.angleId, kind }, ttl);
+  const token = signMedia(req.params.id, req.params.angleId, kind, ttl);
   const exp = Math.floor(Date.now() / 1000) + ttl;
   res.json({ data: { token, kind, expiresAt: new Date(exp * 1000).toISOString() } });
 }));

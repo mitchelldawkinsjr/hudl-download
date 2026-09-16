@@ -338,7 +338,19 @@ playsRouter.patch(
   '/play-angles/:id/sync',
   requireAuth,
   requireRole('admin', 'operator'),
+  requireTeam(async (req) => {
+    requireUuid(req.params.id, 'play angle');
+    const { rows } = await query(
+      `select g.team_id from play_angles pa
+         join plays p on p.id = pa.play_id
+         join games g on g.id = p.game_id
+        where pa.id = $1`,
+      [req.params.id], { tag: 'play_angles.syncTeam' }
+    );
+    return rows[0]?.team_id ?? null;
+  }),
   asyncHandler(async (req, res) => {
+    requireUuid(req.params.id, 'play angle');
     const parsed = syncSchema.parse(req.body ?? {});
     const ar = req as AuthedRequest;
     const { rows } = await query(
