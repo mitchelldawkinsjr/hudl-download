@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Film Room — Review</title>
+  <link rel="stylesheet" href="../shared/player.css" />
+  <link rel="stylesheet" href="css/review.css" />
+</head>
+<body class="review-app">
+  <section id="loginGate" class="gate">
+    <form id="loginForm" class="gate-form">
+      <h1>Film Room — Review</h1>
+      <label>Email <input id="loginEmail" type="email" required autocomplete="username" /></label>
+      <label>Password <input id="loginPassword" type="password" required autocomplete="current-password" /></label>
+      <button type="submit">Sign in</button>
+      <p id="loginError" class="error" hidden></p>
+    </form>
+  </section>
+
+  <main id="reviewMain" hidden>
+    <header class="review-header">
+      <h1 id="reviewTitle">Review</h1>
+      <div class="pickers">
+        <label>Game <select id="gameSelect"></select></label>
+        <label>Play <select id="playSelect"></select></label>
+      </div>
+    </header>
+
+    <nav class="angle-tabs" id="angleTabs" aria-label="Angle"></nav>
+
+    <section class="player-wrap" id="playerWrap">
+      <div class="video-wrap" id="videoWrap">
+        <video id="video" playsinline controls></video>
+        <canvas id="overlay"></canvas>
+        <div class="placeholder" id="placeholder">Select an angle.</div>
+      </div>
+      <aside class="play-detail" id="playDetail">
+        <div class="meta-row"><label>Quarter <input id="metaQuarter" type="number" min="0" max="10" /></label></div>
+        <div class="meta-row"><label>Game clock <input id="metaGameClock" type="text" maxlength="20" /></label></div>
+        <div class="meta-row"><label>Notes <textarea id="metaNotes" rows="4"></textarea></label></div>
+        <div class="meta-actions">
+          <button id="saveMetaBtn" type="button">Save notes</button>
+          <span id="metaStatus" class="meta-status" role="status" aria-live="polite"></span>
+        </div>
+        <p class="version" id="versionTag">v—</p>
+      </aside>
+    </section>
+  </main>
+
+  <script src="../shared/player.js"></script>
+  <script src="js/api-client.js"></script>
+  <script src="js/review-controller.js"></script>
+</body>
+</html>

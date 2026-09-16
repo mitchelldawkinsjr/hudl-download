@@ -22,6 +22,7 @@ process.env.NODE_ENV = 'test';
 process.env.API_BASE_PATH = '/api/v1';
 process.env.SSRF_ALLOW_HOSTS = '127.0.0.1';
 process.env.SERVE_STATIC_DIR = REPO_ROOT;
+process.env.MEDIA_ROOT = join(REPO_ROOT, 'test-results', 'media');
 process.env.LIVE_FILMROOM_ENABLED = 'false';
 
 const MOCK_PORT = 9997;

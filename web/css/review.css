@@ -1,0 +1,39 @@
+/* Film Room Review screen. Reuses tokens from player.css. */
+[hidden] { display: none !important; }
+
+.review-app { max-width: 1200px; margin: 0 auto; padding: 16px; color: var(--text, #eee); }
+.gate { display: grid; place-items: center; min-height: 60vh; }
+.gate-form { display: grid; gap: 10px; width: 280px; }
+.gate-form h1 { margin: 0 0 8px; font-size: 18px; }
+.gate-form input { padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #eee; }
+.gate-form button { padding: 9px; border: 0; border-radius: 6px; background: var(--accent, #3b82f6); color: #fff; font-weight: 600; }
+.error { color: var(--danger, #ef4444); font-size: 13px; }
+
+.review-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--panel, #1e1e1e); border-radius: 10px; }
+.review-header h1 { margin: 0; font-size: 18px; }
+.pickers { display: flex; gap: 10px; }
+.pickers select { padding: 6px; border-radius: 6px; background: #222; color: #eee; border: 1px solid #444; }
+
+.angle-tabs { display: flex; gap: 6px; margin: 12px 0; flex-wrap: wrap; }
+.angle-tab { padding: 8px 14px; border-radius: 999px; border: 1px solid #444; background: #222; color: #ddd; cursor: pointer; font-size: 13px; }
+.angle-tab[aria-selected="true"] { background: var(--accent, #3b82f6); color: #fff; border-color: var(--accent, #3b82f6); }
+.angle-tab[data-disabled="true"] { opacity: .5; cursor: not-allowed; }
+
+.player-wrap { display: grid; grid-template-columns: 1fr 280px; gap: 12px; }
+.video-wrap { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16/9; }
+.video-wrap video { width: 100%; height: 100%; display: block; }
+.video-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: #aaa; text-align: center; padding: 16px; }
+.placeholder[data-status="missing"] { color: #f59e0b; }
+.placeholder[data-status="processing"] { color: #3b82f6; }
+.placeholder[data-status="failed"] { color: var(--danger, #ef4444); }
+
+.play-detail { background: var(--panel, #1e1e1e); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.meta-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-dim, #aaa); }
+.meta-row input, .meta-row textarea { padding: 6px; border-radius: 6px; border: 1px solid #444; background: #222; color: #eee; }
+.meta-actions { display: flex; align-items: center; gap: 8px; }
+.meta-actions button { padding: 6px 12px; border: 0; border-radius: 6px; background: var(--accent, #3b82f6); color: #fff; }
+.meta-status { font-size: 12px; color: var(--text-dim, #aaa); }
+.meta-status[data-state="error"] { color: var(--danger, #ef4444); }
+.meta-status[data-state="ok"] { color: #22c55e; }
+.version { font-size: 11px; color: var(--text-dim, #aaa); }

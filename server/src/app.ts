@@ -17,6 +17,8 @@ import { sourcesRouter } from './routes/sources.js';
 import { gamesRouter } from './routes/games.js';
 import { playsRouter } from './routes/plays.js';
 import { eventsRouter } from './routes/events.js';
+import { mediaRouter } from './routes/media.js';
+import { telestrationsRouter } from './routes/telestrations.js';
 import { testResetRouter } from './routes/test-reset.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -40,6 +42,8 @@ export function createApp() {
   app.use(`${base}/games`, gamesRouter);        // /games, /games/:id/...
   app.use(`${base}`, playsRouter);             // /games/:id/plays, /plays/:id, /play-angles/:id/sync
   app.use(`${base}`, eventsRouter);            // /games/:id/events
+  app.use(`${base}`, mediaRouter);             // /plays/:id/angles/:angleId/clip|thumbnail
+  app.use(`${base}`, telestrationsRouter);     // /plays/:id/telestrations, /telestrations/:id
 
   // Test-only reset endpoint (never mounted in production).
   if (env.NODE_ENV === 'test') {
