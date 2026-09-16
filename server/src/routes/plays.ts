@@ -177,6 +177,7 @@ playsRouter.get(
         (anglesByPlay[a.play_id] ||= []).push({
           id: a.id, sourceId: a.source_id, sourceKey: a.source_key,
           status: a.status, clipUri: a.clip_uri, errorCode: a.error_code,
+          syncOffsetMs: a.sync_offset_ms,
         });
       }
     }
@@ -200,7 +201,15 @@ playsRouter.get(
        where pa.play_id = $1 order by s.sort_order`,
       [req.params.id]
     );
-    res.json({ data: playToJson(rows[0], angles.rows) });
+    res.json({ data: playToJson(rows[0], angles.rows.map((a) => ({
+      id: a.id, sourceId: a.source_id, sourceKey: a.source_key,
+      status: a.status, clipUri: a.clip_uri, thumbnailUri: a.thumbnail_uri,
+      durationMs: a.duration_ms, width: a.width, height: a.height, fps: a.fps,
+      codecs: a.codecs, checksum: a.checksum, syncOffsetMs: a.sync_offset_ms,
+      errorCode: a.error_code, errorMessage: a.error_message,
+      requestedStartTime: a.requested_start_time, requestedEndTime: a.requested_end_time,
+      actualStartTime: a.actual_start_time, actualEndTime: a.actual_end_time,
+    }))) });
   })
 );
 

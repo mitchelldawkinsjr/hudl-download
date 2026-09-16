@@ -98,6 +98,30 @@
       t.addEventListener('click', () => selectAngle(a.id));
       tabs.appendChild(t);
     }
+    // Side by Side tab (Phase 6): enabled only when >=2 ready angles.
+    const ready = angles.filter((a) => a.status === 'ready');
+    if (angles.length >= 2) {
+      const t = document.createElement('button');
+      t.className = 'angle-tab';
+      t.dataset.angleId = '__sbs__';
+      t.dataset.disabled = String(ready.length < 2);
+      t.textContent = ready.length < 2 ? 'Side by Side (needs 2 ready)' : 'Side by Side';
+      t.addEventListener('click', () => selectSideBySide());
+      tabs.appendChild(t);
+    }
+  }
+
+  async function selectSideBySide() {
+    currentAngleId = '__sbs__';
+    document.querySelectorAll('.angle-tab').forEach((t) => {
+      t.setAttribute('aria-selected', String(t.dataset.angleId === '__sbs__'));
+    });
+    const ready = angles.filter((a) => a.status === 'ready');
+    if (ready.length < 2) { showPlaceholder('missing', 'Side by Side needs two ready angles.'); return; }
+    $('playerWrap').hidden = true;
+    $('sbsWrap').hidden = false;
+    window.SideBySide.build($('sbsGrid'), currentPlay.id, ready);
+    window.SideBySide.show();
   }
 
   async function selectAngle(angleId) {
@@ -108,6 +132,10 @@
     });
     const a = angles.find((x) => x.id === angleId);
     if (!a) return;
+    // Single-angle view: hide side-by-side, show the single player.
+    $('sbsWrap').hidden = true;
+    $('playerWrap').hidden = false;
+    if (window.SideBySide) window.SideBySide.hide();
 
     if (a.status !== 'ready') {
       // Missing-angle UX: specific status, no broken player.
@@ -209,6 +237,7 @@
     ['metaQuarter', 'metaGameClock', 'metaNotes'].forEach((id) => {
       $(id).addEventListener('input', captureDirty);
     });
+    if (window.SideBySide) window.SideBySide.init();
 
     fetch(api.BASE + '/auth/csrf', { credentials: 'same-origin' }).then(() => {
       api.primeCsrf();

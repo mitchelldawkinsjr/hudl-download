@@ -37,3 +37,20 @@
 .meta-status[data-state="error"] { color: var(--danger, #ef4444); }
 .meta-status[data-state="ok"] { color: #22c55e; }
 .version { font-size: 11px; color: var(--text-dim, #aaa); }
+
+/* Side by side (Phase 6) */
+.sbs { margin-top: 12px; }
+.sbs-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sbs-cell { position: relative; background: #000; border-radius: 8px; overflow: hidden; aspect-ratio: 16/9; }
+.sbs-cell video { width: 100%; height: 100%; display: block; }
+.sbs-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.sbs-canvas.active { outline: 3px solid var(--accent, #3b82f6); outline-offset: -3px; cursor: crosshair; }
+.sbs-canvas:not(.active) { pointer-events: none; opacity: .85; }
+.sbs-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.sbs-controls button, .sbs-controls select { padding: 6px 10px; border-radius: 6px; border: 1px solid #444; background: #222; color: #eee; }
+.sbs-controls .sync-offset input { width: 80px; }
+.sbs-status { font-size: 12px; color: var(--text-dim, #aaa); }
+.sbs-status[data-state="ok"] { color: #22c55e; }
+.sbs-status[data-state="error"] { color: var(--danger, #ef4444); }
+.sbs-draw { margin-top: 8px; display: flex; gap: 12px; align-items: center; font-size: 13px; }
+.sbs-draw label { display: inline-flex; gap: 4px; }

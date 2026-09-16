@@ -46,10 +46,33 @@
         <p class="version" id="versionTag">v—</p>
       </aside>
     </section>
+
+    <!-- Side by side (Phase 6): shown when the Side by Side tab is active. -->
+    <section class="sbs" id="sbsWrap" hidden>
+      <div class="sbs-grid" id="sbsGrid"></div>
+      <div class="sbs-controls">
+        <button id="sbsPlay" type="button">Play</button>
+        <button id="sbsPause" type="button">Pause</button>
+        <button id="sbsBack5" type="button">−5s</button>
+        <button id="sbsFwd5" type="button">+5s</button>
+        <label>Speed <select id="sbsSpeed"><option>0.25</option><option selected>1</option><option>2</option></select></label>
+        <label class="sync-offset">Sync offset (ms) <input id="sbsOffset" type="number" step="33" value="0" /></label>
+        <button id="sbsSaveOffset" type="button">Save offset</button>
+        <span id="sbsStatus" class="sbs-status" role="status" aria-live="polite"></span>
+      </div>
+      <div class="sbs-draw">
+        <span>Draw on:</span>
+        <label><input type="radio" name="sbsDraw" value="0" checked /> Drone</label>
+        <label><input type="radio" name="sbsDraw" value="1" /> Press Box</label>
+        <label><input type="radio" name="sbsDraw" value="both" /> Both</label>
+      </div>
+    </section>
   </main>
 
   <script src="../shared/player.js"></script>
   <script src="js/api-client.js"></script>
+  <script src="js/multi-angle-player.js"></script>
+  <script src="js/side-by-side-controller.js"></script>
   <script src="js/review-controller.js"></script>
 </body>
 </html>
