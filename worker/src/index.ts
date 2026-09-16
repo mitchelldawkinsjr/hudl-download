@@ -1,0 +1,42 @@
+// Worker entry point. Polls media_jobs for due queued clip jobs, leases one
+// at a time, runs the pipeline, and requeues/deads on failure. Runs until
+// SIGINT/SIGTERM.
+import { leaseDueJob, closePool } from './db.js';
+import { processJob, requeueOrDead, makeAdapter } from './pipeline.js';
+import { config } from './config.js';
+import pino from 'pino';
+
+const log = pino({ level: config.logLevel, name: 'worker' });
+
+let running = true;
+
+async function tick(): Promise<void> {
+  const job = await leaseDueJob(config.workerId, config.leaseMs);
+  if (!job) return;
+  log.info({ jobId: job.id, attempts: job.attempts }, 'leased job');
+  try {
+    await processJob(job, { adapter: makeAdapter() });
+  } catch (err) {
+    await requeueOrDead(job, err).catch((e) => log.error({ err: e }, 'requeue failed'));
+  }
+}
+
+async function loop(): Promise<void> {
+  log.info({ workerId: config.workerId, pollMs: config.pollMs }, 'worker started');
+  while (running) {
+    try { await tick(); }
+    catch (err) { log.error({ err }, 'tick failed'); }
+    await new Promise((r) => setTimeout(r, config.pollMs));
+  }
+  await closePool();
+  log.info('worker stopped');
+}
+
+const stop = (sig: string) => () => {
+  log.info({ sig }, 'stopping');
+  running = false;
+};
+process.on('SIGINT', stop('SIGINT'));
+process.on('SIGTERM', stop('SIGTERM'));
+
+loop().catch((err) => { log.error({ err }, 'fatal'); process.exit(1); });

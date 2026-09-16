@@ -1,0 +1,17 @@
+# Worker image. Needs ffmpeg/ffprobe for the clip pipeline. Build context is
+# the repo root (../ from infra/).
+FROM node:20-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY worker/package.json worker/package-lock.json* ./worker/
+WORKDIR /app/worker
+RUN npm ci --omit=dev --no-audit --no-fund || npm install --omit=dev --no-audit --no-fund
+WORKDIR /app
+COPY worker ./worker
+COPY db ./db
+WORKDIR /app/worker
+ENV NODE_ENV=production
+# /media holds validated angles + thumbnails (mount a volume in compose).
+VOLUME ["/media"]
+CMD ["npx", "tsx", "src/index.ts"]

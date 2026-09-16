@@ -1,0 +1,24 @@
+{
+  "name": "filmroom-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Film Room media worker: leases clip jobs, fetches recordings over HTTP from the external MediaMTX, and produces validated MP4 angles + thumbnails via FFmpeg.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "test": "node --test --test-concurrency=1 --import tsx tests/*.test.ts"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "^2.0.0",
+    "pg": "^8.13.1",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
