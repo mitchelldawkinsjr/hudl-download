@@ -13,9 +13,9 @@ and a parser for Hudl's "Save Page As" presentation exports.
 
 ![Timestamped telestration demo](docs/telestration-demo.gif)
 
-*The demo above uses a synthetic color-bar test clip (see [Generating a test
-clip](#generating-a-test-clip)) — draw an arrow while paused, skip forward and
-it disappears, jump back to the note and it's there again.*
+*Paused on a game clip: the circle and arrow belong to that frame. Skip
+forward and they leave. Jump back to the note and they are on the picture
+again.*
 
 ## Features
 
@@ -374,7 +374,7 @@ back to an index suffix, never a wrong play number.
 ### Generating a test clip
 
 If you don't have real footage handy, this makes a 10-second synthetic
-color-bar clip (the one used for the demo GIF above) that decodes anywhere:
+color-bar clip that decodes anywhere:
 
 ```bash
 ffmpeg -f lavfi -i "testsrc=duration=10:size=960x540:rate=30" \
