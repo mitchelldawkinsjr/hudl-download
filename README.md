@@ -11,11 +11,12 @@ same player engine. Also includes a companion stream downloader (browser
 extension + remux script) for saving your own accessible game film locally,
 and a parser for Hudl's "Save Page As" presentation exports.
 
+![Telestration on a paused game frame](docs/telestration.jpg)
+
 ![Timestamped telestration demo](docs/telestration-demo.gif)
 
-*Paused on a game clip: the circle and arrow belong to that frame. Skip
-forward and they leave. Jump back to the note and they are on the picture
-again.*
+*The still is the marked frame. In the clip, skip forward and the circle and
+arrow leave. Jump back to the note and they are on the picture again.*
 
 ## Features
 
