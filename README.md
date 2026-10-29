@@ -11,6 +11,8 @@ same player engine. Also includes a companion stream downloader (browser
 extension + remux script) for saving your own accessible game film locally,
 and a parser for Hudl's "Save Page As" presentation exports.
 
+The extension is published as **[Film Room Downloader](https://chromewebstore.google.com/detail/film-room-downloader/kjnadjpdehgoghbbflbbffnpeoonhkbe)** on the Chrome Web Store.
+
 ![Telestration on a paused game frame](docs/telestration.jpg)
 
 ![Timestamped telestration demo](docs/telestration-demo.gif)
@@ -225,6 +227,10 @@ quarantines it), delete `electron/node_modules/electron` and re-run
 `npm start`.
 
 ### 3. Downloader extension
+
+Install from the Chrome Web Store: **[Film Room Downloader](https://chromewebstore.google.com/detail/film-room-downloader/kjnadjpdehgoghbbflbbffnpeoonhkbe)**.
+
+The steps below load this repository's copy for development.
 
 1. Open `chrome://extensions`, enable **Developer mode**.
 2. Click **Load unpacked** and select the `extension/` folder.
